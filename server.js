@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 
 // לשלב הבא: כתובת ה-API של האפליקציה שלך
 // לדוגמה: https://rehab-dent-admin.base44.app
-const APP_API_BASE_URL = process.env.APP_API_BASE_URL || "";
+const APP_API_BASE_URL = "https://rehab-dent-admin.base44.app";
 
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
