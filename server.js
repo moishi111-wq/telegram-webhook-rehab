@@ -150,6 +150,38 @@ async function fetchAvailableSlots(flowType) {
   }
 }
 
+async function bookSlot(slotId, flowType, chatId) {
+  if (!APP_API_BASE_URL) {
+    return { success: false };
+  }
+
+  try {
+    const res = await fetch(`${APP_API_BASE_URL}/api/book-slot`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        slot_id: slotId,
+        flow_type: flowType,
+        patient_name: `telegram_${chatId}`,
+        patient_id: chatId.toString(),
+        phone: "",
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Booking failed:", await res.text());
+      return { success: false };
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("bookSlot error:", err);
+    return { success: false };
+  }
+}
+
 function slotKeyboard(slots, flowType) {
   const rows = slots.slice(0, 8).map((slot) => [
     {
@@ -419,13 +451,28 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
 
   // Slot placeholder
   if (data.startsWith("slot:")) {
+  const [, flowType, slotId] = data.split(":");
+
+  await editMessage(chatId, messageId, "מעבד את הזמנת התור...");
+
+  const result = await bookSlot(slotId, flowType, chatId);
+
+  if (result.success) {
     return editMessage(
       chatId,
       messageId,
-      "שלב אישור התור יחובר בשלב הבא מול האפליקציה.",
+      "התור נקבע בהצלחה ✅\n\nנשלח אליך אישור בהמשך.",
       backToMainKeyboard()
     );
   }
+
+  return editMessage(
+    chatId,
+    messageId,
+    "התור כבר נתפס או שלא ניתן להזמין כרגע ❌\n\nאנא בחר תור אחר.",
+    backToMainKeyboard()
+  );
+}
 
   return editMessage(chatId, messageId, "הפעולה לא זוהתה.", backToMainKeyboard());
 }
