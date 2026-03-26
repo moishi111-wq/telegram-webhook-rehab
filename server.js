@@ -525,14 +525,20 @@ console.log("SLOTS LENGTH:", slots?.length);
 
   const result = await bookSlot(slotId, flowType, chatId);
 
-  if (result.success) {
-    return editMessage(
-      chatId,
-      messageId,
-      "התור נקבע בהצלחה ✅\n\nנשלח אליך אישור בהמשך.",
-      backToMainKeyboard()
-    );
-  }
+if (result.success) {
+  return editMessage(
+    chatId,
+    messageId,
+    `✅ התור נקבע בהצלחה
+
+📅 תאריך: ${result.date || ""}
+🕘 שעה: ${result.time || ""}
+👨‍⚕️ רופא: ${result.doctor_name || ""}
+
+נשלח אליך אישור בהמשך.`,
+    backToMainKeyboard()
+  );
+}
 
   return editMessage(
     chatId,
