@@ -6,6 +6,7 @@ app.use(express.json());
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
+console.log("SERVER VERSION: slot-debug-v1");
 
 // לשלב הבא: כתובת ה-API של האפליקציה שלך
 // לדוגמה: https://rehab-dent-admin.base44.app
@@ -143,6 +144,11 @@ async function fetchAvailableSlots(flowType) {
     }
 
     const data = await res.json();
+    
+console.log("APP_API_BASE_URL:", APP_API_BASE_URL);
+console.log("FLOW TYPE:", flowType);
+console.log("SLOTS RESPONSE:", JSON.stringify(data));
+    
     return Array.isArray(data?.slots) ? data.slots : [];
   } catch (error) {
     console.error("fetchAvailableSlots error:", error);
