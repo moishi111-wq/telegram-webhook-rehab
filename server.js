@@ -158,10 +158,10 @@ async function fetchAvailableSlots(flowType) {
       return [];
     }
 
-    let data;
+  let parsed;
 
 try {
-  data = JSON.parse(text);
+  parsed = JSON.parse(text);
 } catch (err) {
   console.error("Failed to parse JSON response:", err);
   console.log("Full raw response was:", text);
@@ -169,25 +169,16 @@ try {
 }
 
 console.log("PARSED RESPONSE:");
-console.log(JSON.stringify(data, null, 2));
+console.log(JSON.stringify(parsed, null, 2));
 
-const slots = Array.isArray(data?.slots) ? data.slots : [];
+const slots = Array.isArray(parsed?.slots) ? parsed.slots : [];
 
 console.log("EXTRACTED SLOTS:");
 console.log(JSON.stringify(slots, null, 2));
 console.log("EXTRACTED SLOTS LENGTH:", slots.length);
-
+    
 return slots;
-    if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
-      console.error("Received HTML instead of JSON from slots endpoint");
-      return [];
-    }
-
-    const data = JSON.parse(text);
-
-    console.log("SLOTS RESPONSE:", JSON.stringify(data));
-
-    return Array.isArray(data?.slots) ? data.slots : [];
+    
   } catch (error) {
     console.error("fetchAvailableSlots error:", error);
     return [];
