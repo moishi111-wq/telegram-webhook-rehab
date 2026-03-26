@@ -191,7 +191,7 @@ async function bookSlot(slotId, flowType, chatId) {
   }
 
   try {
-    const res = await fetch(`${APP_API_BASE_URL}/api/book-slot`, {
+    const res = await fetch(`${APP_API_BASE_URL}/api/apps/69b792dd54c7935ae7606aaa/functions/bookSlot`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
