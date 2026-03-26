@@ -227,17 +227,48 @@ async function bookSlot(slotId, flowType, chatId) {
 }
 
 function slotKeyboard(slots, flowType) {
-  const rows = slots.slice(0, 8).map((slot) => [
-    {
-      text: `${slot.date} | ${slot.time} | ${slot.doctor_name}`,
-      callback_data: `slot:${flowType}:${slot.slot_id}`,
-    },
-  ]);
+  const rows = slots.slice(0, 8).map((slot) => {
+    console.log("SINGLE SLOT OBJECT:");
+    console.log(JSON.stringify(slot, null, 2));
+
+    const slotId =
+      slot.slot_id ??
+      slot.id ??
+      slot._id ??
+      slot.uuid ??
+      slot.value ??
+      "missing_id";
+
+    const doctorName =
+      slot.doctor_name ??
+      slot.doctor ??
+      slot.provider_name ??
+      slot.provider ??
+      "ללא שם";
+
+    const dateText =
+      slot.date ??
+      slot.day ??
+      slot.start_date ??
+      "ללא תאריך";
+
+    const timeText =
+      slot.time ??
+      slot.hour ??
+      slot.start_time ??
+      "ללא שעה";
+
+    return [
+      {
+        text: `${dateText} | ${timeText} | ${doctorName}`,
+        callback_data: `slot:${flowType}:${slotId}`,
+      },
+    ];
+  });
 
   rows.push([{ text: "חזרה לתפריט הראשי", callback_data: "nav:main" }]);
   return inlineKeyboard(rows);
 }
-
 // ---------------------------
 // Flow handlers
 // ---------------------------
