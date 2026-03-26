@@ -232,36 +232,36 @@ function slotKeyboard(slots, flowType) {
     console.log(JSON.stringify(slot, null, 2));
 
     const slotId =
-      slot.slot_id ??
-      slot.id ??
-      slot._id ??
-      slot.uuid ??
-      slot.value ??
+      slot.slot_id ||
+      slot.id ||
+      slot._id ||
+      slot.uuid ||
+      slot.value ||
       "missing_id";
 
     const doctorName =
-      slot.doctor_name ??
-      slot.doctor ??
-      slot.provider_name ??
-      slot.provider ??
+      slot.doctor_name ||
+      slot.doctor ||
+      slot.provider_name ||
+      slot.provider ||
       "ללא שם";
 
     const dateText =
-      slot.date ??
-      slot.day ??
-      slot.start_date ??
+      slot.date ||
+      slot.day ||
+      slot.start_date ||
       "ללא תאריך";
 
     const timeText =
-      slot.time ??
-      slot.hour ??
-      slot.start_time ??
+      slot.time ||
+      slot.hour ||
+      slot.start_time ||
       "ללא שעה";
 
     return [
       {
-        text: `${dateText} | ${timeText} | ${doctorName}`,
-        callback_data: `slot:${flowType}:${slotId}`,
+        text: dateText + " | " + timeText + " | " + doctorName,
+        callback_data: "slot:" + flowType + ":" + slotId,
       },
     ];
   });
