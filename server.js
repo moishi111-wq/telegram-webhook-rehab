@@ -129,26 +129,37 @@ function backToMainKeyboard() {
 
 async function fetchAvailableSlots(flowType) {
   if (!APP_API_BASE_URL) {
+    console.log("APP_API_BASE_URL missing");
     return [];
   }
 
   try {
-    const res = await fetch(
-      `${APP_API_BASE_URL}/api/bot-slots?flow_type=${encodeURIComponent(flowType)}`,
-      { method: "GET" }
-    );
+    const url = `${APP_API_BASE_URL}/api/bot-slots?flow_type=${encodeURIComponent(flowType)}`;
+    console.log("Fetching slots from:", url);
+
+    const res = await fetch(url, { method: "GET" });
+
+    const text = await res.text();
+
+    console.log("HTTP status:", res.status);
+    console.log("Raw response preview:", text.slice(0, 300));
 
     if (!res.ok) {
-      console.error("Failed to fetch slots from app:", await res.text());
+      console.error("Failed to fetch slots from app:", text);
       return [];
     }
 
-    const data = await res.json();
-    
-console.log("APP_API_BASE_URL:", APP_API_BASE_URL);
-console.log("FLOW TYPE:", flowType);
-console.log("SLOTS RESPONSE:", JSON.stringify(data));
-    
+    if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+      console.error("Received HTML instead of JSON from slots endpoint");
+      return [];
+    }
+
+    const data = JSON.parse(text);
+
+    console.log("APP_API_BASE_URL:", APP_API_BASE_URL);
+    console.log("FLOW TYPE:", flowType);
+    console.log("SLOTS RESPONSE:", JSON.stringify(data));
+
     return Array.isArray(data?.slots) ? data.slots : [];
   } catch (error) {
     console.error("fetchAvailableSlots error:", error);
