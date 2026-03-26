@@ -158,6 +158,26 @@ async function fetchAvailableSlots(flowType) {
       return [];
     }
 
+    let data;
+
+try {
+  data = JSON.parse(text);
+} catch (err) {
+  console.error("Failed to parse JSON response:", err);
+  console.log("Full raw response was:", text);
+  return [];
+}
+
+console.log("PARSED RESPONSE:");
+console.log(JSON.stringify(data, null, 2));
+
+const slots = Array.isArray(data?.slots) ? data.slots : [];
+
+console.log("EXTRACTED SLOTS:");
+console.log(JSON.stringify(slots, null, 2));
+console.log("EXTRACTED SLOTS LENGTH:", slots.length);
+
+return slots;
     if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
       console.error("Received HTML instead of JSON from slots endpoint");
       return [];
@@ -328,7 +348,9 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
 
   if (data === "rehab_exam_q3:yes") {
     const slots = await fetchAvailableSlots("rehab_exam_booking");
-
+console.log("SLOTS RECEIVED IN FLOW:", slots);
+console.log("SLOTS LENGTH:", slots?.length);
+    
     if (slots.length > 0) {
       return editMessage(
         chatId,
