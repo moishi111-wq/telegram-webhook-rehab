@@ -569,15 +569,27 @@ app.post("/telegram/webhook", async (req, res) => {
       const chatId = update.message.chat.id;
       const text = update.message.text.trim();
 
-      if (text === "/start") {
-        await handleStart(chatId);
-      } else {
-        await sendMessage(
-          chatId,
-          "כרגע ניתן להתחיל דרך התפריט הראשי.",
-          backToMainKeyboard()
-        );
-      }
+      if (text.startsWith("/start")) {
+  const parts = text.split(" ");
+  const payload = parts.length > 1 ? parts[1] : null;
+
+  console.log("START payload:", payload);
+
+  if (payload) {
+    await sendMessage(
+      chatId,
+      `קיבלתי מזהה: ${payload}`
+    );
+  } else {
+    await handleStart(chatId);
+  }
+} else {
+  await sendMessage(
+    chatId,
+    "כרגע ניתן להתחיל דרך תפריט ראשי.",
+    backToMainKeyboard()
+  );
+}
     }
 
     // Callback buttons
