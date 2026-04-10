@@ -569,12 +569,6 @@ app.post("/telegram/webhook", async (req, res) => {
       const chatId = update.message.chat.id;
       const text = update.message.text.trim();
 
-      if (text.startsWith("/start")) {
-  const parts = text.split(" ");
-  const payload = parts.length > 1 ? parts[1] : null;
-
-  console.log("START payload:", payload);
-
 if (text.startsWith("/start")) {
   const parts = text.split(" ");
   const payload = parts.length > 1 ? parts[1] : null;
