@@ -575,14 +575,21 @@ if (text.startsWith("/start")) {
 
   console.log("START payload:", payload);
 
-  if (payload) {
-    await sendMessage(
-      chatId,
-      `קיבלתי מזהה: ${payload}`
-    );
-  } else {
-    await handleStart(chatId);
-  }
+ if (payload) {
+  console.log("Patient Journey ID:", payload);
+
+  await sendMessage(
+    chatId,
+    "מחבר אותך למסע המטופל שלך..."
+  );
+
+  await sendMessage(
+    chatId,
+    `מספר מזהה: ${payload}`
+  );
+} else {
+  await handleStart(chatId);
+}
 } else {
   await sendMessage(
     chatId,
