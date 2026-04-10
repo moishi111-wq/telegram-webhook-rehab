@@ -575,6 +575,12 @@ app.post("/telegram/webhook", async (req, res) => {
 
   console.log("START payload:", payload);
 
+if (text.startsWith("/start")) {
+  const parts = text.split(" ");
+  const payload = parts.length > 1 ? parts[1] : null;
+
+  console.log("START payload:", payload);
+
   if (payload) {
     await sendMessage(
       chatId,
@@ -583,6 +589,13 @@ app.post("/telegram/webhook", async (req, res) => {
   } else {
     await handleStart(chatId);
   }
+} else {
+  await sendMessage(
+    chatId,
+    "כרגע ניתן להתחיל דרך תפריט ראשי.",
+    backToMainKeyboard()
+  );
+}
 } else {
   await sendMessage(
     chatId,
