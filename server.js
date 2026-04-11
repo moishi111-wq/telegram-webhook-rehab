@@ -565,47 +565,76 @@ app.post("/telegram/webhook", async (req, res) => {
     console.log("Incoming update:", JSON.stringify(update, null, 2));
 
     // Text messages
-    if (update.message?.text) {
-      const chatId = update.message.chat.id;
-      const text = update.message.text.trim();
+// Text messages
+if (update.message?.text) {
+  const chatId = update.message.chat.id;
+  const text = update.message.text.trim();
 
-if (text.startsWith("/start")) {
-  const parts = text.split(" ");
-  const payload = parts.length > 1 ? parts[1] : null;
+  if (text.startsWith("/start")) {
+    const parts = text.split(" ");
+    const payload = parts.length > 1 ? parts[1] : null;
 
-  console.log("START payload:", payload);
+    console.log("START payload:", payload);
 
- if (payload) {
-  console.log("Patient Journey ID:", payload);
+    if (payload) {
+      console.log("Patient Journey ID:", payload);
 
-  await sendMessage(
-    chatId,
-    "מחבר אותך למסע המטופל שלך..."
-  );
+      await sendMessage(
+        chatId,
+        "מחפש את מסע המטופל שלך..."
+      );
 
-  await sendMessage(
-    chatId,
-    `מספר מזהה: ${payload}`
-  );
-} else {
-  await handleStart(chatId);
-}
-} else {
-  await sendMessage(
-    chatId,
-    "כרגע ניתן להתחיל דרך תפריט ראשי.",
-    backToMainKeyboard()
-  );
-}
-} else {
-  await sendMessage(
-    chatId,
-    "כרגע ניתן להתחיל דרך תפריט ראשי.",
-    backToMainKeyboard()
-  );
-}
+      try {
+        const response = await fetch(
+          `${APP_BASE_URL}/api/apps/69b792dd54c7935ae7606aaa/entities/PatientJourney?journey_id=${payload}`,
+          {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const data = await response.json();
+        console.log("PatientJourney lookup result:", JSON.stringify(data));
+
+        const journey =
+          Array.isArray(data) ? data[0] :
+          Array.isArray(data?.results) ? data.results[0] :
+          null;
+
+        if (!journey) {
+          await sendMessage(
+            chatId,
+            "לא נמצא מסע מטופל מתאים עבור הקישור הזה."
+          );
+          return;
+        }
+
+        await sendMessage(
+          chatId,
+          `מצאתי את המסע שלך${journey.public_title ? ": " + journey.public_title : ""}`
+        );
+
+      } catch (error) {
+        console.error("PatientJourney lookup failed:", error);
+        await sendMessage(
+          chatId,
+          "אירעה שגיאה בעת טעינת מסע המטופל."
+        );
+      }
+
+    } else {
+      await handleStart(chatId);
     }
 
+  } else {
+    await sendMessage(
+      chatId,
+      "כרגע ניתן להתחיל דרך תפריט ראשי.",
+      backToMainKeyboard()
+    );
+  }
+}
     // Callback buttons
     if (update.callback_query) {
       const callback = update.callback_query;
