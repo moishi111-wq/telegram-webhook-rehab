@@ -612,6 +612,9 @@ if (payload) {
 } else {
   await handleStart(chatId);
 }
+
+}
+  
     // Callback buttons
     if (update.callback_query) {
       const callback = update.callback_query;
