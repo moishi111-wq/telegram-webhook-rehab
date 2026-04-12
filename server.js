@@ -557,64 +557,65 @@ if (result.success) {
 app.get("/", (_req, res) => {
   res.json({ ok: true, message: "Telegram webhook server is running" });
 });
-
 app.post("/telegram/webhook", async (req, res) => {
   try {
     const update = req.body;
     console.log("Incoming update:", JSON.stringify(update, null, 2));
 
     // Text messages
-// Text messages
-if (update.message?.text) {
-  const chatId = update.message.chat.id;
-  const text = update.message.text.trim();
+    if (update.message?.text) {
+      const chatId = update.message.chat.id;
+      const text = update.message.text.trim();
 
-  if (text.startsWith("/start")) {
-    const parts = text.split(" ");
-    const payload = parts.length > 1 ? parts[1] : null;
+      if (text.startsWith("/start")) {
+        const parts = text.split(" ");
+        const payload = parts.length > 1 ? parts[1] : null;
 
-    console.log("START payload:", payload);
+        console.log("START payload:", payload);
 
-if (payload) {
-  const token = payload.trim();
+        if (payload) {
+          const token = payload.trim();
 
-  await sendMessage(chatId, "מחפש את מסע המטופל שלך...");
+          await sendMessage(chatId, "מחפש את מסע המטופל שלך...");
 
-  try {
-    const response = await fetch(
-      "https://69b792dd54c7935ae7606aaa.base44.app/functions/getPatientJourneyByToken",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-base44-app-id": "69b792dd54c7935ae7606aaa",
-        },
-        body: JSON.stringify({ token }),
+          try {
+            const response = await fetch(
+              "https://69b792dd54c7935ae7606aaa.base44.app/functions/getPatientJourneyByToken",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-base44-app-id": "69b792dd54c7935ae7606aaa",
+                },
+                body: JSON.stringify({ token }),
+              }
+            );
+
+            const result = await response.json();
+
+            if (!result || typeof result.found === "undefined") {
+              throw new Error("Invalid response from Base44");
+            }
+
+            if (!result.found) {
+              await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
+              return res.sendStatus(200);
+            }
+
+            await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
+            return res.sendStatus(200);
+          } catch (error) {
+            console.error("Base44 error:", error);
+            await sendMessage(chatId, "⚠️ אירעה שגיאה בעת בדיקת הקישור.");
+            return res.sendStatus(200);
+          }
+        } else {
+          await handleStart(chatId);
+          return res.sendStatus(200);
+        }
       }
-    );
-
-    const result = await response.json();
-
-    if (!result || typeof result.found === "undefined") {
-      throw new Error("Invalid response from Base44");
     }
 
-    if (!result.found) {
-      await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
-      return;
-    }
-
-    await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
-  } catch (error) {
-    console.error("Base44 error:", error);
-    await sendMessage(chatId, "⚠️ אירעה שגיאה בעת בדיקת הקישור.");
-  }
-} else {
-  await handleStart(chatId);
-}
-
-}
-  
     // Callback buttons
     if (update.callback_query) {
       const callback = update.callback_query;
@@ -623,15 +624,15 @@ if (payload) {
       const data = callback.data;
 
       await handleCallback(chatId, messageId, callback.id, data);
+      return res.sendStatus(200);
     }
 
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (error) {
     console.error("Webhook error:", error);
-    res.sendStatus(200);
+    return res.sendStatus(200);
   }
 });
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
