@@ -605,17 +605,13 @@ if (payload) {
     }
 
     await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
-
   } catch (error) {
     console.error("Base44 error:", error);
-
     await sendMessage(chatId, "⚠️ אירעה שגיאה בעת בדיקת הקישור.");
   }
-
 } else {
   await handleStart(chatId);
 }
-
     // Callback buttons
     if (update.callback_query) {
       const callback = update.callback_query;
