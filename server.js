@@ -1,6 +1,5 @@
 import express from "express";
 import fetch from "node-fetch";
-import axios from "axios";
 const app = express();
 app.use(express.json());
 
@@ -576,65 +575,47 @@ if (update.message?.text) {
 
     console.log("START payload:", payload);
 
-    if (payload) {
-      console.log("Patient Journey ID:", payload);
+if (payload) {
+  const token = payload.trim();
 
-      await sendMessage(
-        chatId,
-        "מחפש את מסע המטופל שלך..."
-      );
+  await sendMessage(chatId, "מחפש את מסע המטופל שלך...");
 
-      try {
-        const response = await fetch(
-          `${APP_BASE_URL}/api/apps/69b792dd54c7935ae7606aaa/entities/PatientJourney?journey_id=${payload}`,
-          {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        const data = await response.json();
-        console.log("PatientJourney lookup result:", JSON.stringify(data));
-
-        const journey =
-          Array.isArray(data) ? data[0] :
-          Array.isArray(data?.results) ? data.results[0] :
-          null;
-
-        if (!journey) {
-          await sendMessage(
-            chatId,
-            "לא נמצא מסע מטופל מתאים עבור הקישור הזה."
-          );
-          return;
-        }
-
-        await sendMessage(
-          chatId,
-          `מצאתי את המסע שלך${journey.public_title ? ": " + journey.public_title : ""}`
-        );
-
-      } catch (error) {
-        console.error("PatientJourney lookup failed:", error);
-        await sendMessage(
-          chatId,
-          "אירעה שגיאה בעת טעינת מסע המטופל."
-        );
+  try {
+    const response = await fetch(
+      "https://69b792dd54c7935ae7606aaa.base44.app/functions/getPatientJourneyByToken",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-base44-app-id": "69b792dd54c7935ae7606aaa",
+        },
+        body: JSON.stringify({ token }),
       }
+    );
 
-    } else {
-      await handleStart(chatId);
+    const result = await response.json();
+
+    if (!result || typeof result.found === "undefined") {
+      throw new Error("Invalid response from Base44");
     }
 
-  } else {
-    await sendMessage(
-      chatId,
-      "כרגע ניתן להתחיל דרך תפריט ראשי.",
-      backToMainKeyboard()
-    );
+    if (!result.found) {
+      await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
+      return;
+    }
+
+    await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
+
+  } catch (error) {
+    console.error("Base44 error:", error);
+
+    await sendMessage(chatId, "⚠️ אירעה שגיאה בעת בדיקת הקישור.");
   }
+
+} else {
+  await handleStart(chatId);
 }
+
     // Callback buttons
     if (update.callback_query) {
       const callback = update.callback_query;
