@@ -579,27 +579,24 @@ app.post("/telegram/webhook", async (req, res) => {
           await sendMessage(chatId, "מחפש את מסע המטופל שלך...");
 
           try {
-            const response = await fetch(
-              "https://69b792dd54c7935ae7606aaa.base44.app/functions/getPatientJourneyByToken",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "x-base44-app-id": "69b792dd54c7935ae7606aaa",
-                },
-                body: JSON.stringify({ token }),
-              }
-            );
+   const response = await fetch(
+  "https://dental-consult-efac37c8.base44.app/api/functions/getPatientJourneyByToken",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
+    },
+    body: JSON.stringify({ token }),
+  }
+);
 
-const result = await response.json();
-console.log("Base44 raw result:", JSON.stringify(result, null, 2));
+const envelope = await response.json();
+console.log("Base44 raw result:", JSON.stringify(envelope, null, 2));
 
-const found =
-  result?.found === true ||
-  result?.success === true ||
-  result?.data?.found === true;
-
-const journeyData = result?.data?.data || result?.data || null;
+const result = envelope?.data || {};
+const found = result?.found === true;
+const journeyData = result?.data || null;
 
 if (!found && !journeyData) {
   await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
