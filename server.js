@@ -591,21 +591,28 @@ app.post("/telegram/webhook", async (req, res) => {
   }
 );
 
+console.log("Base44 HTTP status:", response.status, response.statusText);
+            
 const envelope = await response.json();
 console.log("Base44 raw result:", JSON.stringify(envelope, null, 2));
 
-const result = envelope?.data || {};
-const found = result?.found === true;
-const journeyData = result?.data || null;
+const result = envelope?.data ?? envelope ?? {};
+const journeyData =
+  result?.data ??
+  (result?.public_token ? result : null);
 
-if (!found && !journeyData) {
+const found =
+  result?.found === true ||
+  !!journeyData;
+
+if (!found) {
   await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
   return res.sendStatus(200);
 }
 
-        await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
+await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
 console.log("PatientJourney found:", JSON.stringify(journeyData, null, 2));
-            return res.sendStatus(200);
+return res.sendStatus(200);
           } catch (error) {
             console.error("Base44 error:", error);
             await sendMessage(chatId, "⚠️ אירעה שגיאה בעת בדיקת הקישור.");
