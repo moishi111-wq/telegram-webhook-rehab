@@ -9,7 +9,7 @@ console.log("SERVER VERSION: slot-debug-v1");
 
 // לשלב הבא: כתובת ה-API של האפליקציה שלך
 // לדוגמה: https://rehab-dent-admin.base44.app
-const APP_API_BASE_URL = "https://69b792dd54c7935ae7606aaa.base44.app";
+const APP_API_BASE_URL = "https://dental-consult-efac37c8.base44.app";
 
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -133,7 +133,7 @@ async function fetchAvailableSlots(flowType) {
   }
 
   try {
-    const url = `${APP_API_BASE_URL}/api/apps/69b792dd54c7935ae7606aaa/functions/getAvailableSlots`;
+    const url = `${APP_API_BASE_URL}/api/functions/getAvailableSlots`;
     console.log("Fetching slots from:", url);
     console.log("FLOW TYPE:", flowType);
 
@@ -190,7 +190,7 @@ async function bookSlot(slotId, flowType, chatId) {
   }
 
   try {
-    const res = await fetch(`${APP_API_BASE_URL}/api/apps/69b792dd54c7935ae7606aaa/functions/bookSlot`, {
+    const res = await fetch(`${APP_API_BASE_URL}/api/functions/bookSlot`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
