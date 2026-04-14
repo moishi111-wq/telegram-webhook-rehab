@@ -609,8 +609,25 @@ if (!found) {
   await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
   return res.sendStatus(200);
 }
-
-await sendMessage(chatId, "✅ התהליך אותר בהצלחה.");
+await sendMessage(
+  chatId,
+  "מה תרצה לעשות?\nנמצא עבורך תהליך שיקום הפה 👋",
+  {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "📅 קביעת תור", callback_data: "BOOK_APPOINTMENT" }
+        ],
+        [
+          { text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }
+        ],
+        [
+          { text: "☎️ יצירת קשר", callback_data: "CONTACT" }
+        ]
+      ]
+    }
+  }
+);
 console.log("PatientJourney found:", JSON.stringify(journeyData, null, 2));
 return res.sendStatus(200);
           } catch (error) {
