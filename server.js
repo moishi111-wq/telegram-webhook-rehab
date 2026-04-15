@@ -639,21 +639,19 @@ if (!found) {
 }
 await sendMessage(
   chatId,
-  "מה תרצה לעשות?\nנמצא עבורך תהליך שיקום הפה 👋",
+  "👋 נמצא עבורך תהליך שיקום הפה!\nמה תרצה לעשות?",
   {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "📅 קביעת תור", callback_data: "flow:rehab_exam" }
-        ],
-        [
-          { text: "📄 צפייה בפרטים", callback_data: "nav:main" }
-        ],
-        [
-          { text: "☎️ יצירת קשר", callback_data: "CONTACT" }
-        ]
+    inline_keyboard: [
+      [
+        { text: "📅 קביעת תור", callback_data: "flow:rehab_exam" }
+      ],
+      [
+        { text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }
+      ],
+      [
+        { text: "☎️ יצירת קשר", callback_data: "CONTACT" }
       ]
-    }
+    ]
   }
 );
 console.log("PatientJourney found:", JSON.stringify(journeyData, null, 2));
