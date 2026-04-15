@@ -561,7 +561,35 @@ app.post("/telegram/webhook", async (req, res) => {
   try {
     const update = req.body;
     console.log("Incoming update:", JSON.stringify(update, null, 2));
+// ==========================
+// Button clicks (callback_query)
+// ==========================
+if (update.callback_query) {
+  const chatId = update.callback_query.message.chat.id;
+  const data = update.callback_query.data;
 
+  console.log("Button clicked:", data);
+
+  await answerCallbackQuery(update.callback_query.id);
+
+  if (data === "BOOK_APPOINTMENT") {
+    await sendMessage(chatId, "לחצת על קביעת תור");
+    return res.sendStatus(200);
+  }
+
+  if (data === "VIEW_DETAILS") {
+    await sendMessage(chatId, "לחצת על צפייה בפרטים");
+    return res.sendStatus(200);
+  }
+
+  if (data === "CONTACT") {
+    await sendMessage(chatId, "לחצת על יצירת קשר");
+    return res.sendStatus(200);
+  }
+
+  await sendMessage(chatId, "פעולה לא מזוהה");
+  return res.sendStatus(200);
+}
     // Text messages
     if (update.message?.text) {
       const chatId = update.message.chat.id;
@@ -616,10 +644,10 @@ await sendMessage(
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "📅 קביעת תור", callback_data: "BOOK_APPOINTMENT" }
+          { text: "📅 קביעת תור", callback_data: "flow:rehab_exam" }
         ],
         [
-          { text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }
+          { text: "📄 צפייה בפרטים", callback_data: "nav:main" }
         ],
         [
           { text: "☎️ יצירת קשר", callback_data: "CONTACT" }
