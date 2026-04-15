@@ -329,6 +329,23 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     return handleFlowSelection(chatId, messageId, flowCode);
   }
 
+  if (data === "booking:show_slots") {
+
+  await editMessage(chatId, messageId, "🔍 טוען תורים...");
+
+  return editMessage(
+    chatId,
+    messageId,
+    "📅 תורים לדוגמה:\n\nיום א 09:00\nיום א 09:30",
+    {
+      inline_keyboard: [
+        [{ text: "בחר 09:00", callback_data: "slot:1" }],
+        [{ text: "בחר 09:30", callback_data: "slot:2" }],
+        [{ text: "🔙 חזרה", callback_data: "nav:main" }]
+      ]
+    }
+  );
+}
   // Journey 1
   if (data === "rehab_exam_q1:yes") {
     return editMessage(
