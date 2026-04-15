@@ -346,6 +346,21 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     }
   );
 }
+ if (data.startsWith("slot:")) {
+
+  const slotIndex = data.split(":")[1];
+
+  return editMessage(
+    chatId,
+    messageId,
+    `✅ בחרת תור מספר ${slotIndex}\n\n(בהמשך זה ישמר במערכת)`,
+    {
+      inline_keyboard: [
+        [{ text: "🏠 חזרה", callback_data: "nav:main" }]
+      ]
+    }
+  );
+} 
   // Journey 1
   if (data === "rehab_exam_q1:yes") {
     return editMessage(
