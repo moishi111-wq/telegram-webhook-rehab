@@ -272,6 +272,19 @@ async function handleStart(chatId) {
 }
 
 async function handleFlowSelection(chatId, messageId, flowCode) {
+ if (flowCode === "journey_booking") {
+  return editMessage(
+    chatId,
+    messageId,
+    "🔍 מאתר עבורך תורים מתאימים...",
+    {
+      inline_keyboard: [
+        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
+        [{ text: "🏠 חזרה", callback_data: "nav:main" }]
+      ]
+    }
+  );
+}
   if (flowCode === "rehab_exam") {
     return editMessage(
       chatId,
