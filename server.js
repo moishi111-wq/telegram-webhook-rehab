@@ -89,7 +89,7 @@ const START_TEXT = `שלום,
 
 function mainMenuKeyboard() {
   return inlineKeyboard([
-    [{ text: "קביעת בדיקה שיקומית", callback_data: "flow:rehab_exam" }],
+    [{ text: "קביעת בדיקה שיקומית", callback_data: "flow:journey_booking" }],
     [{ text: "קביעת תור אצל רופא משקם", callback_data: "flow:rehab_doctor" }],
     [{ text: "קביעת תור המשך טיפול", callback_data: "flow:rehab_followup" }],
   ]);
@@ -565,29 +565,14 @@ app.post("/telegram/webhook", async (req, res) => {
 // Button clicks (callback_query)
 // ==========================
 if (update.callback_query) {
-  const chatId = update.callback_query.message.chat.id;
-  const data = update.callback_query.data;
+  const callback = update.callback_query;
+  const chatId = callback.message.chat.id;
+  const messageId = callback.message.message_id;
+  const data = callback.data;
 
   console.log("Button clicked:", data);
 
-  await answerCallbackQuery(update.callback_query.id);
-
-  if (data === "BOOK_APPOINTMENT") {
-    await sendMessage(chatId, "לחצת על קביעת תור");
-    return res.sendStatus(200);
-  }
-
-  if (data === "VIEW_DETAILS") {
-    await sendMessage(chatId, "לחצת על צפייה בפרטים");
-    return res.sendStatus(200);
-  }
-
-  if (data === "CONTACT") {
-    await sendMessage(chatId, "לחצת על יצירת קשר");
-    return res.sendStatus(200);
-  }
-
-  await sendMessage(chatId, "פעולה לא מזוהה");
+  await handleCallback(chatId, messageId, callback.id, data);
   return res.sendStatus(200);
 }
     // Text messages
@@ -643,7 +628,7 @@ await sendMessage(
   {
     inline_keyboard: [
       [
-        { text: "📅 קביעת תור", callback_data: "flow:rehab_exam" }
+        { text: "📅 קביעת תור", callback_data: "flow:journey_booking" }
       ],
       [
         { text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }
