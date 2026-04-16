@@ -82,6 +82,7 @@ async function sendJourneyBookingMenu(chatId, messageId, token) {
   // 1. בדוק אם יש booking
 
   const bookingState = await fetchJourneyBookingState(token);
+  console.log("SEND MENU NEW BUILD");
 console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
   
 let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
