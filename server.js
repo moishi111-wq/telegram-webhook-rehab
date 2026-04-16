@@ -80,10 +80,9 @@ function getJourneyTokenFromSession(chatId) {
 }
 async function sendJourneyBookingMenu(chatId, messageId, token) {
   // 1. בדוק אם יש booking
-  const bookingState = await fetchJourneyBookingState(token);
-  let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
-console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
-if (
+let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
+console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
+  if (
   (bookingState?.success && bookingState?.exists && bookingState?.booking) ||
   localBooking
 ) {
