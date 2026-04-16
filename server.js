@@ -78,6 +78,20 @@ async function answerCallbackQuery(callbackQueryId, text = "") {
 function getJourneyTokenFromSession(chatId) {
   return journeyTokensByChat.get(String(chatId)) || null;
 }
+async function sendJourneyBookingMenu(chatId, messageId, token) {
+  return editMessage(
+    chatId,
+    messageId,
+    "🏥 תפריט הזמנות למסע המטופל\n\nבחר פעולה:",
+    {
+      inline_keyboard: [
+        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
+        [{ text: "📋 צפה בהזמנה קיימת", callback_data: "booking:view" }],
+        [{ text: "❌ בטל הזמנה", callback_data: "booking:cancel" }]
+      ]
+    }
+  );
+}
 function inlineKeyboard(rows) {
   return {
     inline_keyboard: rows,
