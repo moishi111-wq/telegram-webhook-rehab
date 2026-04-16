@@ -51,6 +51,8 @@ async function sendMessage(chatId, text, replyMarkup = undefined) {
   return telegramRequest("sendMessage", payload);
 }
 
+const journeyTokensByChat = new Map();
+
 async function editMessage(chatId, messageId, text, replyMarkup = undefined) {
   const payload = {
     chat_id: chatId,
@@ -72,6 +74,10 @@ async function answerCallbackQuery(callbackQueryId, text = "") {
   });
 }
 
+// ===== Journey Token Helper =====
+function getJourneyTokenFromSession(chatId) {
+  return journeyTokensByChat.get(String(chatId)) || null;
+}
 function inlineKeyboard(rows) {
   return {
     inline_keyboard: rows,
@@ -684,7 +690,8 @@ if (update.callback_query) {
 
         if (payload) {
           const token = payload.trim();
-
+          journeyTokensByChat.set(String(chatId), token);
+          
           await sendMessage(chatId, "מחפש את מסע המטופל שלך...");
 
           try {
