@@ -6,8 +6,13 @@ app.use(express.json());
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-
 console.log("SERVER VERSION: slot-debug-v1");
+
+if (!BOT_TOKEN) {
+  throw new Error("Missing BOT_TOKEN environment variable");
+}
+
+const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 async function telegramRequest(method, payload) {
   const res = await fetch(`${TELEGRAM_API}/${method}`, {
