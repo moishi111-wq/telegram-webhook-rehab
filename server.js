@@ -347,7 +347,7 @@ function slotKeyboard(slots, flowType) {
     return [
       {
         text: dateText + " | " + timeText + " | " + doctorName,
-        callback_data: "slot:" + flowType + ":" + slotId,
+        callback_data: "" + flowType + ":" + slotId,
       },
     ];
   });
@@ -450,14 +450,14 @@ if (data === "nav:main") {
     "📅 תורים לדוגמה:\n\nיום א 09:00\nיום א 09:30",
     {
       inline_keyboard: [
-        [{ text: "בחר 09:00", callback_data: "slot:1" }],
-        [{ text: "בחר 09:30", callback_data: "slot:2" }],
+        [{ text: "בחר 09:00", callback_data: "1" }],
+        [{ text: "בחר 09:30", callback_data: "2" }],
         [{ text: "🔙 חזרה", callback_data: "nav:main" }]
       ]
     }
   );
 }
-if (data.startsWith("slot:")) {
+if (data.startsWith("")) {
 
   const slotIndex = data.split(":")[1];
 
@@ -715,7 +715,14 @@ console.log("SLOTS LENGTH:", slots?.length);
   await editMessage(chatId, messageId, "מעבד את הזמנת התור...");
 
   const result = await bookSlot(slotId, flowType, chatId);
-
+if (result.success) {
+  journeyTokensByChat.set(String(chatId) + "_booking", {
+    slot_date: result.date,
+    slot_time: result.time,
+    provider_name: result.doctor_name,
+    location_name: ""
+  });
+}
 if (result.success) {
   return editMessage(
     chatId,
