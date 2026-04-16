@@ -6,7 +6,7 @@ app.use(express.json());
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
 console.log("SERVER VERSION: slot-debug-v1");
-
+async function sendJourneyBookingMenu(chatId, messageId, token) {
 // לשלב הבא: כתובת ה-API של האפליקציה שלך
 // לדוגמה: https://rehab-dent-admin.base44.app
 const APP_API_BASE_URL = "https://dental-consult-efac37c8.base44.app";
@@ -80,6 +80,10 @@ function getJourneyTokenFromSession(chatId) {
 }
 async function sendJourneyBookingMenu(chatId, messageId, token) {
   // 1. בדוק אם יש booking
+
+  const bookingState = await fetchJourneyBookingState(token);
+console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
+  
 let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
 console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
   if (
