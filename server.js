@@ -1,25 +1,13 @@
 import express from "express";
 import fetch from "node-fetch";
+
 const app = express();
 app.use(express.json());
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
+
 console.log("SERVER VERSION: slot-debug-v1");
-async function sendJourneyBookingMenu(chatId, messageId, token) {
-// לשלב הבא: כתובת ה-API של האפליקציה שלך
-// לדוגמה: https://rehab-dent-admin.base44.app
-const APP_API_BASE_URL = "https://dental-consult-efac37c8.base44.app";
-
-if (!BOT_TOKEN) {
-  throw new Error("Missing BOT_TOKEN environment variable");
-}
-
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
-// ---------------------------
-// Telegram helpers
-// ---------------------------
 
 async function telegramRequest(method, payload) {
   const res = await fetch(`${TELEGRAM_API}/${method}`, {
