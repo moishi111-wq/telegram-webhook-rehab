@@ -737,12 +737,6 @@ if (result.success) {
   );
 }
 
-  console.log("BOOKING SAVED LOCALLY:", JSON.stringify(
-    journeyTokensByChat.get(String(chatId) + "_booking"),
-    null,
-    2
-  ));
-}
 if (result.success) {
   return editMessage(
     chatId,
