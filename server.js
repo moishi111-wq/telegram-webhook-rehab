@@ -737,7 +737,7 @@ if (result.success) {
   );
 }
 
-if (result.success) {
+    if (result.success) {
   return editMessage(
     chatId,
     messageId,
