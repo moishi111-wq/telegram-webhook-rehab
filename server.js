@@ -79,15 +79,57 @@ function getJourneyTokenFromSession(chatId) {
   return journeyTokensByChat.get(String(chatId)) || null;
 }
 async function sendJourneyBookingMenu(chatId, messageId, token) {
+  // 1. בדוק אם יש booking
+  const bookingState = await fetchJourneyBookingState(token);
+
+  if (bookingState?.success && bookingState?.exists && bookingState?.booking) {
+    const b = bookingState.booking;
+
+    return editMessage(
+      chatId,
+      messageId,
+      `🏥 יש לך תור קיים\n\n📅 ${b.slot_date || "-"}\n🕒 ${b.slot_time || "-"}\n👨‍⚕️ ${b.provider_name || "-"}\n📍 ${b.location_name || "-"}`,
+      {
+        inline_keyboard: [
+          [{ text: "📋 צפה בהזמנה", callback_data: "booking:view" }],
+          [{ text: "❌ בטל תור", callback_data: "booking:cancel" }],
+          [{ text: "🔁 שנה מועד", callback_data: "booking:reschedule" }]
+        ]
+      }
+    );
+  }
+
+  // 2. אין booking → בדוק אם בכלל מותר לקבוע תור
+  const journey = await fetchPatientJourneyByToken(token);
+
+  const step = journey?.current_step || journey?.step || {};
+
+  const isBookingEnabled =
+    step?.booking_channel ||
+    step?.procedure_type_mapping_id ||
+    step?.recommended_doctor_id;
+
+  if (!isBookingEnabled) {
+    return editMessage(
+      chatId,
+      messageId,
+      "📌 בשלב זה אין אפשרות לקבוע תור דרך הבוט.\n\nאם יידרש תיאום תור — תקבל הנחיה בהמשך.",
+      {
+        inline_keyboard: [
+          [{ text: "⬅️ חזרה", callback_data: "nav:main" }]
+        ]
+      }
+    );
+  }
+
+  // 3. מותר להזמין אבל אין תור
   return editMessage(
     chatId,
     messageId,
-    "🏥 תפריט הזמנות למסע המטופל\n\nבחר פעולה:",
+    "📅 ניתן לקבוע תור עבור שלב זה.\n\nבחר:",
     {
       inline_keyboard: [
-        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
-        [{ text: "📋 צפה בהזמנה קיימת", callback_data: "booking:view" }],
-        [{ text: "❌ בטל הזמנה", callback_data: "booking:cancel" }]
+        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }]
       ]
     }
   );
