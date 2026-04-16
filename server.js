@@ -319,9 +319,24 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
   await answerCallbackQuery(callbackQueryId);
 
   // Navigation
-  if (data === "nav:main") {
-    return editMessage(chatId, messageId, START_TEXT, mainMenuKeyboard());
+if (data === "nav:main") {
+  const token = getJourneyTokenFromSession(chatId);
+
+  if (!token) {
+    return editMessage(
+      chatId,
+      messageId,
+      "❌ לא נמצא טוקן פעיל למסע המטופל.",
+      {
+        inline_keyboard: [
+          [{ text: "🏠 חזרה", callback_data: "nav:main" }]
+        ]
+      }
+    );
   }
+
+  return sendJourneyBookingMenu(chatId, messageId, token);
+}
 
   // Main menu flow selection
   if (data.startsWith("flow:")) {
