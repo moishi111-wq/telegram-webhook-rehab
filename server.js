@@ -715,7 +715,10 @@ console.log("SLOTS LENGTH:", slots?.length);
 
   await editMessage(chatId, messageId, "מעבד את הזמנת התור...");
 
-  const result = await bookSlot(slotId, flowType, chatId);
+const result = await bookSlot(slotId, flowType, chatId);
+
+console.log("BOOK SLOT RESULT:", JSON.stringify(result, null, 2));
+
 if (result.success) {
   journeyTokensByChat.set(String(chatId) + "_booking", {
     slot_date: result.date,
@@ -723,6 +726,16 @@ if (result.success) {
     provider_name: result.doctor_name,
     location_name: ""
   });
+
+  console.log(
+    "BOOKING SAVED LOCALLY:",
+    JSON.stringify(
+      journeyTokensByChat.get(String(chatId) + "_booking"),
+      null,
+      2
+    )
+  );
+}
 
   console.log("BOOKING SAVED LOCALLY:", JSON.stringify(
     journeyTokensByChat.get(String(chatId) + "_booking"),
