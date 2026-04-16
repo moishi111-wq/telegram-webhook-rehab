@@ -81,7 +81,7 @@ function getJourneyTokenFromSession(chatId) {
 async function sendJourneyBookingMenu(chatId, messageId, token) {
   // 1. בדוק אם יש booking
   const bookingState = await fetchJourneyBookingState(token);
-
+console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
   if (bookingState?.success && bookingState?.exists && bookingState?.booking) {
     const b = bookingState.booking;
 
@@ -101,7 +101,7 @@ async function sendJourneyBookingMenu(chatId, messageId, token) {
 
   // 2. אין booking → בדוק אם בכלל מותר לקבוע תור
   const journey = await fetchPatientJourneyByToken(token);
-
+console.log("DEBUG journey:", JSON.stringify(journey, null, 2));
   const step = journey?.current_step || journey?.step || {};
 
   const isBookingEnabled =
