@@ -151,6 +151,23 @@ async function fetchPatientJourneyByToken(token) {
   const result = envelope?.data ?? envelope ?? {};
   return result;
 }
+async function fetchJourneyBookingState(token) {
+  const response = await fetch(
+    "https://dental-consult-efac37c8.base44.app/api/functions/getJourneyBookingState",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
+      },
+      body: JSON.stringify({ token }),
+    }
+  );
+
+  const envelope = await response.json();
+  const result = envelope?.data ?? envelope ?? {};
+  return result;
+}
 function inlineKeyboard(rows) {
   return {
     inline_keyboard: rows,
