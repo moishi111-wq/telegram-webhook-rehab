@@ -723,6 +723,12 @@ if (result.success) {
     provider_name: result.doctor_name,
     location_name: ""
   });
+
+  console.log("BOOKING SAVED LOCALLY:", JSON.stringify(
+    journeyTokensByChat.get(String(chatId) + "_booking"),
+    null,
+    2
+  ));
 }
 if (result.success) {
   return editMessage(
