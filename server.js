@@ -346,21 +346,57 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     }
   );
 }
- if (data.startsWith("slot:")) {
+if (data.startsWith("slot:")) {
 
   const slotIndex = data.split(":")[1];
 
-  return editMessage(
-    chatId,
-    messageId,
-    `✅ בחרת תור מספר ${slotIndex}\n\n(בהמשך זה ישמר במערכת)`,
-    {
-      inline_keyboard: [
-        [{ text: "🏠 חזרה", callback_data: "nav:main" }]
-      ]
-    }
-  );
-} 
+  await editMessage(chatId, messageId, "⏳ שומר את התור שבחרת...");
+
+  try {
+    const response = await fetch(
+      "https://dental-consult-efac37c8.base44.app/api/functions/bot/bookSlot",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api_key": process.env.BASE44_API_KEY
+        },
+        body: JSON.stringify({
+          slot_index: slotIndex,
+          booking_source: "telegram"
+        })
+      }
+    );
+
+    const result = await response.json();
+    console.log("bookSlot:", result);
+
+    return editMessage(
+      chatId,
+      messageId,
+      "✅ התור נקבע בהצלחה!",
+      {
+        inline_keyboard: [
+          [{ text: "🏠 חזרה לתפריט", callback_data: "nav:main" }]
+        ]
+      }
+    );
+
+  } catch (error) {
+    console.error("Booking error:", error);
+
+    return editMessage(
+      chatId,
+      messageId,
+      "❌ שגיאה בקביעת התור",
+      {
+        inline_keyboard: [
+          [{ text: "🔙 חזרה", callback_data: "nav:main" }]
+        ]
+      }
+    );
+  }
+}
   // Journey 1
   if (data === "rehab_exam_q1:yes") {
     return editMessage(
