@@ -1,91 +1,127 @@
 import express from "express";
 import fetch from "node-fetch";
-
+ 
 const app = express();
 app.use(express.json());
-
+ 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
 console.log("SERVER VERSION: slot-debug-v1");
-
+ 
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
 }
-
+ 
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
+ 
 async function telegramRequest(method, payload) {
   const res = await fetch(`${TELEGRAM_API}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
+ 
   const data = await res.json().catch(() => ({}));
-
+ 
   if (!res.ok || data.ok === false) {
     console.error(`Telegram API error on ${method}:`, data);
     throw new Error(`Telegram API request failed: ${method}`);
   }
-
+ 
   return data;
 }
-
+ 
 async function sendMessage(chatId, text, replyMarkup = undefined) {
   const payload = {
     chat_id: chatId,
     text,
   };
-
+ 
   if (replyMarkup) {
     payload.reply_markup = replyMarkup;
   }
-
+ 
   return telegramRequest("sendMessage", payload);
 }
-
+ 
 const journeyTokensByChat = new Map();
-
+ 
 async function editMessage(chatId, messageId, text, replyMarkup = undefined) {
   const payload = {
     chat_id: chatId,
     message_id: messageId,
     text,
   };
-
+ 
   if (replyMarkup) {
     payload.reply_markup = replyMarkup;
   }
-
+ 
   return telegramRequest("editMessageText", payload);
 }
-
+ 
 async function answerCallbackQuery(callbackQueryId, text = "") {
   return telegramRequest("answerCallbackQuery", {
     callback_query_id: callbackQueryId,
     text,
   });
 }
-
+ 
 // ===== Journey Token Helper =====
 function getJourneyTokenFromSession(chatId) {
   return journeyTokensByChat.get(String(chatId)) || null;
 }
+ 
+async function fetchJourneyAvailableSlots(token) {
+  const response = await fetch(
+    "https://dental-consult-efac37c8.base44.app/api/functions/getJourneyAvailableSlots",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
+      },
+      body: JSON.stringify({ token }),
+    }
+  );
+  const envelope = await response.json();
+  return envelope?.data ?? envelope ?? {};
+}
+ 
+async function createJourneyBookingRecord(token, slotId) {
+  const response = await fetch(
+    "https://dental-consult-efac37c8.base44.app/api/functions/createJourneyBooking",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
+      },
+      body: JSON.stringify({
+        token,
+        slot_id: slotId,
+        booking_source: "telegram",
+      }),
+    }
+  );
+  const envelope = await response.json();
+  return envelope?.data ?? envelope ?? {};
+}
+ 
 async function sendJourneyBookingMenu(chatId, messageId, token) {
-  // 1. בדוק אם יש booking
-
   const bookingState = await fetchJourneyBookingState(token);
   console.log("SEND MENU NEW BUILD");
-console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
-  
-let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
-console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
+  console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
+ 
+  let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
+  console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
+ 
   if (
-  (bookingState?.success && bookingState?.exists && bookingState?.booking) ||
-  localBooking
-) {
-  const b = bookingState?.booking || localBooking;
-
+    (bookingState?.success && bookingState?.exists && bookingState?.booking) ||
+    localBooking
+  ) {
+    const b = bookingState?.booking || localBooking;
+ 
     return editMessage(
       chatId,
       messageId,
@@ -99,17 +135,16 @@ console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
       }
     );
   }
-
-  // 2. אין booking → בדוק אם בכלל מותר לקבוע תור
+ 
   const journey = await fetchPatientJourneyByToken(token);
-console.log("DEBUG journey:", JSON.stringify(journey, null, 2));
+  console.log("DEBUG journey:", JSON.stringify(journey, null, 2));
   const step = journey?.current_step || journey?.step || {};
-
+ 
   const isBookingEnabled =
     step?.booking_channel ||
     step?.procedure_type_mapping_id ||
     step?.recommended_doctor_id;
-
+ 
   if (!isBookingEnabled) {
     return editMessage(
       chatId,
@@ -122,8 +157,7 @@ console.log("DEBUG journey:", JSON.stringify(journey, null, 2));
       }
     );
   }
-
-  // 3. מותר להזמין אבל אין תור
+ 
   return editMessage(
     chatId,
     messageId,
@@ -135,6 +169,7 @@ console.log("DEBUG journey:", JSON.stringify(journey, null, 2));
     }
   );
 }
+ 
 async function fetchPatientJourneyByToken(token) {
   const response = await fetch(
     "https://dental-consult-efac37c8.base44.app/api/functions/getPatientJourneyByToken",
@@ -147,11 +182,12 @@ async function fetchPatientJourneyByToken(token) {
       body: JSON.stringify({ token }),
     }
   );
-
+ 
   const envelope = await response.json();
   const result = envelope?.data ?? envelope ?? {};
   return result;
 }
+ 
 async function fetchJourneyBookingState(token) {
   const response = await fetch(
     "https://dental-consult-efac37c8.base44.app/api/functions/getJourneyBookingState",
@@ -164,26 +200,27 @@ async function fetchJourneyBookingState(token) {
       body: JSON.stringify({ token }),
     }
   );
-
+ 
   const envelope = await response.json();
   const result = envelope?.data ?? envelope ?? {};
   return result;
 }
+ 
 function inlineKeyboard(rows) {
   return {
     inline_keyboard: rows,
   };
 }
-
+ 
 // ---------------------------
 // UI text
 // ---------------------------
-
+ 
 const START_TEXT = `שלום,
 ברוך הבא למערכת זימון התורים של המחלקה לשיקום הפה.
-
+ 
 כיצד נוכל לעזור לך?`;
-
+ 
 function mainMenuKeyboard() {
   return inlineKeyboard([
     [{ text: "קביעת בדיקה שיקומית", callback_data: "flow:journey_booking" }],
@@ -191,7 +228,7 @@ function mainMenuKeyboard() {
     [{ text: "קביעת תור המשך טיפול", callback_data: "flow:rehab_followup" }],
   ]);
 }
-
+ 
 function yesNoNotSureKeyboard(prefix) {
   return inlineKeyboard([
     [
@@ -202,7 +239,7 @@ function yesNoNotSureKeyboard(prefix) {
     [{ text: "חזרה לתפריט הראשי", callback_data: "nav:main" }],
   ]);
 }
-
+ 
 function yesDontRememberKeyboard(prefix) {
   return inlineKeyboard([
     [
@@ -212,28 +249,28 @@ function yesDontRememberKeyboard(prefix) {
     [{ text: "חזרה לתפריט הראשי", callback_data: "nav:main" }],
   ]);
 }
-
+ 
 function backToMainKeyboard() {
   return inlineKeyboard([
     [{ text: "חזרה לתפריט הראשי", callback_data: "nav:main" }],
   ]);
 }
-
+ 
 // ---------------------------
 // Optional bridge to your app
 // ---------------------------
-
+ 
 async function fetchAvailableSlots(flowType) {
   if (!APP_API_BASE_URL) {
     console.log("APP_API_BASE_URL missing");
     return [];
   }
-
+ 
   try {
     const url = `${APP_API_BASE_URL}/api/functions/getAvailableSlots`;
     console.log("Fetching slots from:", url);
     console.log("FLOW TYPE:", flowType);
-
+ 
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -243,81 +280,49 @@ async function fetchAvailableSlots(flowType) {
         flow_type: flowType,
       }),
     });
-
+ 
     const text = await res.text();
-
+ 
     console.log("HTTP status:", res.status);
     console.log("Raw response preview:", text.slice(0, 300));
-
+ 
     if (!res.ok) {
       console.error("Failed to fetch slots from app:", text);
       return [];
     }
-
-  let parsed;
-
-try {
-  parsed = JSON.parse(text);
-} catch (err) {
-  console.error("Failed to parse JSON response:", err);
-  console.log("Full raw response was:", text);
-  return [];
-}
-
-console.log("PARSED RESPONSE:");
-console.log(JSON.stringify(parsed, null, 2));
-
-const slots = Array.isArray(parsed?.slots) ? parsed.slots : [];
-
-console.log("EXTRACTED SLOTS:");
-console.log(JSON.stringify(slots, null, 2));
-console.log("EXTRACTED SLOTS LENGTH:", slots.length);
-    
-return slots;
-    
+ 
+    let parsed;
+ 
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      console.error("Failed to parse JSON response:", err);
+      console.log("Full raw response was:", text);
+      return [];
+    }
+ 
+    console.log("PARSED RESPONSE:");
+    console.log(JSON.stringify(parsed, null, 2));
+ 
+    const slots = Array.isArray(parsed?.slots) ? parsed.slots : [];
+ 
+    console.log("EXTRACTED SLOTS:");
+    console.log(JSON.stringify(slots, null, 2));
+    console.log("EXTRACTED SLOTS LENGTH:", slots.length);
+ 
+    return slots;
+ 
   } catch (error) {
     console.error("fetchAvailableSlots error:", error);
     return [];
   }
 }
-
-async function bookSlot(slotId, flowType, chatId) {
-  if (!APP_API_BASE_URL) {
-    return { success: false };
-  }
-
-  try {
-    const res = await fetch(`${APP_API_BASE_URL}/api/functions/bookSlot`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        slot_id: slotId,
-        flow_type: flowType,
-        patient_name: `telegram_${chatId}`,
-        patient_id: chatId.toString(),
-        phone: "",
-      }),
-    });
-
-    if (!res.ok) {
-      console.error("Booking failed:", await res.text());
-      return { success: false };
-    }
-
-    return await res.json();
-  } catch (err) {
-    console.error("bookSlot error:", err);
-    return { success: false };
-  }
-}
-
+ 
 function slotKeyboard(slots, flowType) {
   const rows = slots.slice(0, 8).map((slot) => {
     console.log("SINGLE SLOT OBJECT:");
     console.log(JSON.stringify(slot, null, 2));
-
+ 
     const slotId =
       slot.slot_id ||
       slot.id ||
@@ -325,26 +330,26 @@ function slotKeyboard(slots, flowType) {
       slot.uuid ||
       slot.value ||
       "missing_id";
-
+ 
     const doctorName =
       slot.doctor_name ||
       slot.doctor ||
       slot.provider_name ||
       slot.provider ||
       "ללא שם";
-
+ 
     const dateText =
       slot.date ||
       slot.day ||
       slot.start_date ||
       "ללא תאריך";
-
+ 
     const timeText =
       slot.time ||
       slot.hour ||
       slot.start_time ||
       "ללא שעה";
-
+ 
     return [
       {
         text: dateText + " | " + timeText + " | " + doctorName,
@@ -352,36 +357,38 @@ function slotKeyboard(slots, flowType) {
       },
     ];
   });
-
+ 
   rows.push([{ text: "חזרה לתפריט הראשי", callback_data: "nav:main" }]);
   return inlineKeyboard(rows);
 }
+ 
 // ---------------------------
 // Flow handlers
 // ---------------------------
-
+ 
 async function showMainMenu(chatId) {
   return sendMessage(chatId, START_TEXT, mainMenuKeyboard());
 }
-
+ 
 async function handleStart(chatId) {
   return showMainMenu(chatId);
 }
-
+ 
 async function handleFlowSelection(chatId, messageId, flowCode) {
- if (flowCode === "journey_booking") {
-  return editMessage(
-    chatId,
-    messageId,
-    "🔍 מאתר עבורך תורים מתאימים...",
-    {
-      inline_keyboard: [
-        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
-        [{ text: "🏠 חזרה", callback_data: "nav:main" }]
-      ]
-    }
-  );
-}
+  if (flowCode === "journey_booking") {
+    return editMessage(
+      chatId,
+      messageId,
+      "🔍 מאתר עבורך תורים מתאימים...",
+      {
+        inline_keyboard: [
+          [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
+          [{ text: "🏠 חזרה", callback_data: "nav:main" }]
+        ]
+      }
+    );
+  }
+ 
   if (flowCode === "rehab_exam") {
     return editMessage(
       chatId,
@@ -390,7 +397,7 @@ async function handleFlowSelection(chatId, messageId, flowCode) {
       yesNoNotSureKeyboard("rehab_exam_q1")
     );
   }
-
+ 
   if (flowCode === "rehab_doctor") {
     return editMessage(
       chatId,
@@ -399,7 +406,7 @@ async function handleFlowSelection(chatId, messageId, flowCode) {
       yesNoNotSureKeyboard("rehab_doctor_q1")
     );
   }
-
+ 
   if (flowCode === "rehab_followup") {
     return editMessage(
       chatId,
@@ -408,107 +415,111 @@ async function handleFlowSelection(chatId, messageId, flowCode) {
       yesNoNotSureKeyboard("rehab_followup_q1")
     );
   }
-
+ 
   return editMessage(chatId, messageId, "בחירה לא מזוהה.", backToMainKeyboard());
 }
-
+ 
 async function handleCallback(chatId, messageId, callbackQueryId, data) {
   await answerCallbackQuery(callbackQueryId);
-
+ 
   // Navigation
-if (data === "nav:main") {
-  const token = getJourneyTokenFromSession(chatId);
-
-  if (!token) {
-    return editMessage(
-      chatId,
-      messageId,
-      "❌ לא נמצא טוקן פעיל למסע המטופל.",
-      {
-        inline_keyboard: [
-          [{ text: "🏠 חזרה", callback_data: "nav:main" }]
-        ]
-      }
-    );
+  if (data === "nav:main") {
+    const token = getJourneyTokenFromSession(chatId);
+ 
+    if (!token) {
+      return editMessage(
+        chatId,
+        messageId,
+        "❌ לא נמצא טוקן פעיל למסע המטופל.",
+        {
+          inline_keyboard: [
+            [{ text: "🏠 חזרה", callback_data: "nav:main" }]
+          ]
+        }
+      );
+    }
+ 
+    return sendJourneyBookingMenu(chatId, messageId, token);
   }
-
-  return sendJourneyBookingMenu(chatId, messageId, token);
-}
-
+ 
   // Main menu flow selection
   if (data.startsWith("flow:")) {
     const flowCode = data.split(":")[1];
     return handleFlowSelection(chatId, messageId, flowCode);
   }
-
+ 
+  // Slots — קריאה לפונקציה האמיתית ב-Base44
   if (data === "booking:show_slots") {
-
-  await editMessage(chatId, messageId, "🔍 טוען תורים...");
-
-  return editMessage(
-    chatId,
-    messageId,
-    "📅 תורים לדוגמה:\n\nיום א 09:00\nיום א 09:30",
-    {
+    await editMessage(chatId, messageId, "🔍 טוען תורים זמינים...");
+ 
+    const token = getJourneyTokenFromSession(chatId);
+    if (!token) {
+      return editMessage(chatId, messageId, "❌ לא נמצא טוקן פעיל.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+ 
+    const slotsResult = await fetchJourneyAvailableSlots(token);
+    console.log("SLOTS RESULT:", JSON.stringify(slotsResult, null, 2));
+ 
+    const slots = Array.isArray(slotsResult?.slots) ? slotsResult.slots : [];
+ 
+    if (slots.length === 0) {
+      return editMessage(chatId, messageId, "😔 כרגע אין תורים זמינים.\nנסה שוב מאוחר יותר.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+ 
+    const slotRows = slots.slice(0, 8).map((slot) => [{
+      text: `${slot.slot_date || ""} ${slot.slot_time || ""} | ${slot.provider_name || ""}`,
+      callback_data: `slot:${slot.id}`,
+    }]);
+    slotRows.push([{ text: "🔙 חזרה", callback_data: "nav:main" }]);
+ 
+    return editMessage(chatId, messageId, "📅 בחר תור:", {
+      inline_keyboard: slotRows
+    });
+  }
+ 
+  // קביעת תור — קריאה ל-createJourneyBooking ב-Base44
+  if (data.startsWith("slot:")) {
+    const slotId = data.slice(5); // הכל אחרי "slot:"
+    const token = getJourneyTokenFromSession(chatId);
+ 
+    await editMessage(chatId, messageId, "⏳ שומר את התור שבחרת...");
+ 
+    if (!token) {
+      return editMessage(chatId, messageId, "❌ לא נמצא טוקן פעיל.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+ 
+    const result = await createJourneyBookingRecord(token, slotId);
+    console.log("CREATE BOOKING RESULT:", JSON.stringify(result, null, 2));
+ 
+    if (result?.success) {
+      const b = result.booking || {};
+      return editMessage(
+        chatId,
+        messageId,
+        `✅ התור נקבע בהצלחה!\n\n📅 ${b.slot_date || ""}\n🕒 ${b.slot_time || ""}\n👨‍⚕️ ${b.provider_name || ""}`,
+        {
+          inline_keyboard: [
+            [{ text: "📋 צפה בתור", callback_data: "booking:view" }],
+            [{ text: "🏠 חזרה לתפריט", callback_data: "nav:main" }]
+          ]
+        }
+      );
+    }
+ 
+    return editMessage(chatId, messageId, "❌ לא ניתן לקבוע את התור כרגע. נסה שוב.", {
       inline_keyboard: [
-        [{ text: "בחר 09:00", callback_data: "1" }],
-        [{ text: "בחר 09:30", callback_data: "2" }],
+        [{ text: "🔄 הצג תורים", callback_data: "booking:show_slots" }],
         [{ text: "🔙 חזרה", callback_data: "nav:main" }]
       ]
-    }
-  );
-}
-if (data.startsWith("")) {
-
-  const slotIndex = data.split(":")[1];
-
-  await editMessage(chatId, messageId, "⏳ שומר את התור שבחרת...");
-
-  try {
-    const response = await fetch(
-      "https://dental-consult-efac37c8.base44.app/api/functions/bot/bookSlot",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api_key": process.env.BASE44_API_KEY
-        },
-        body: JSON.stringify({
-          slot_index: slotIndex,
-          booking_source: "telegram"
-        })
-      }
-    );
-
-    const result = await response.json();
-    console.log("bookSlot:", result);
-
-    return editMessage(
-      chatId,
-      messageId,
-      "✅ התור נקבע בהצלחה!",
-      {
-        inline_keyboard: [
-          [{ text: "🏠 חזרה לתפריט", callback_data: "nav:main" }]
-        ]
-      }
-    );
-
-  } catch (error) {
-    console.error("Booking error:", error);
-
-    return editMessage(
-      chatId,
-      messageId,
-      "❌ שגיאה בקביעת התור",
-      {
-        inline_keyboard: [
-          [{ text: "🔙 חזרה", callback_data: "nav:main" }]
-        ]
-      }
-    );
+    });
   }
-}
+ 
   // Journey 1
   if (data === "rehab_exam_q1:yes") {
     return editMessage(
@@ -534,7 +545,7 @@ if (data.startsWith("")) {
       backToMainKeyboard()
     );
   }
-
+ 
   if (data === "rehab_exam_q2:yes") {
     return editMessage(
       chatId,
@@ -559,12 +570,12 @@ if (data.startsWith("")) {
       backToMainKeyboard()
     );
   }
-
+ 
   if (data === "rehab_exam_q3:yes") {
     const slots = await fetchAvailableSlots("rehab_exam_booking");
-console.log("SLOTS RECEIVED IN FLOW:", slots);
-console.log("SLOTS LENGTH:", slots?.length);
-    
+    console.log("SLOTS RECEIVED IN FLOW:", slots);
+    console.log("SLOTS LENGTH:", slots?.length);
+ 
     if (slots.length > 0) {
       return editMessage(
         chatId,
@@ -573,7 +584,7 @@ console.log("SLOTS LENGTH:", slots?.length);
         slotKeyboard(slots, "rehab_exam_booking")
       );
     }
-
+ 
     return editMessage(
       chatId,
       messageId,
@@ -597,7 +608,7 @@ console.log("SLOTS LENGTH:", slots?.length);
       backToMainKeyboard()
     );
   }
-
+ 
   // Journey 2
   if (data === "rehab_doctor_q1:yes") {
     return editMessage(
@@ -623,7 +634,7 @@ console.log("SLOTS LENGTH:", slots?.length);
       backToMainKeyboard()
     );
   }
-
+ 
   if (data === "rehab_doctor_q2:yes") {
     return editMessage(
       chatId,
@@ -648,7 +659,7 @@ console.log("SLOTS LENGTH:", slots?.length);
       backToMainKeyboard()
     );
   }
-
+ 
   if (data === "rehab_doctor_q3:yes") {
     return editMessage(
       chatId,
@@ -665,7 +676,7 @@ console.log("SLOTS LENGTH:", slots?.length);
       backToMainKeyboard()
     );
   }
-
+ 
   // Journey 3
   if (data === "rehab_followup_q1:yes") {
     return editMessage(
@@ -691,7 +702,7 @@ console.log("SLOTS LENGTH:", slots?.length);
       backToMainKeyboard()
     );
   }
-
+ 
   if (data === "rehab_followup_q2:yes") {
     return editMessage(
       chatId,
@@ -708,153 +719,100 @@ console.log("SLOTS LENGTH:", slots?.length);
       backToMainKeyboard()
     );
   }
-
-  // Slot placeholder
-  if (data.startsWith("slot:")) {
-  const [, flowType, slotId] = data.split(":");
-
-  await editMessage(chatId, messageId, "מעבד את הזמנת התור...");
-
-const result = await bookSlot(slotId, flowType, chatId);
-
-console.log("BOOK SLOT RESULT:", JSON.stringify(result, null, 2));
-
-if (result.success) {
-  journeyTokensByChat.set(String(chatId) + "_booking", {
-    slot_date: result.date,
-    slot_time: result.time,
-    provider_name: result.doctor_name,
-    location_name: ""
-  });
-
-  console.log(
-    "BOOKING SAVED LOCALLY:",
-    JSON.stringify(
-      journeyTokensByChat.get(String(chatId) + "_booking"),
-      null,
-      2
-    )
-  );
-}
-
-    if (result.success) {
-  return editMessage(
-    chatId,
-    messageId,
-    `✅ התור נקבע בהצלחה
-
-📅 תאריך: ${result.date || ""}
-🕘 שעה: ${result.time || ""}
-👨‍⚕️ רופא: ${result.doctor_name || ""}
-
-נשלח אליך אישור בהמשך.`,
-    backToMainKeyboard()
-  );
-}
-
-  return editMessage(
-    chatId,
-    messageId,
-    "התור כבר נתפס או שלא ניתן להזמין כרגע ❌\n\nאנא בחר תור אחר.",
-    backToMainKeyboard()
-  );
-}
-
+ 
   return editMessage(chatId, messageId, "הפעולה לא זוהתה.", backToMainKeyboard());
 }
-
+ 
 // ---------------------------
 // Routes
 // ---------------------------
-
+ 
 app.get("/", (_req, res) => {
   res.json({ ok: true, message: "Telegram webhook server is running" });
 });
+ 
 app.post("/telegram/webhook", async (req, res) => {
   try {
     const update = req.body;
     console.log("Incoming update:", JSON.stringify(update, null, 2));
-// ==========================
-// Button clicks (callback_query)
-// ==========================
-if (update.callback_query) {
-  const callback = update.callback_query;
-  const chatId = callback.message.chat.id;
-  const messageId = callback.message.message_id;
-  const data = callback.data;
-
-  console.log("Button clicked:", data);
-
-  await handleCallback(chatId, messageId, callback.id, data);
-  return res.sendStatus(200);
-}
+ 
+    // Button clicks (callback_query)
+    if (update.callback_query) {
+      const callback = update.callback_query;
+      const chatId = callback.message.chat.id;
+      const messageId = callback.message.message_id;
+      const data = callback.data;
+ 
+      console.log("Button clicked:", data);
+ 
+      await handleCallback(chatId, messageId, callback.id, data);
+      return res.sendStatus(200);
+    }
+ 
     // Text messages
     if (update.message?.text) {
       const chatId = update.message.chat.id;
       const text = update.message.text.trim();
-
+ 
       if (text.startsWith("/start")) {
         const parts = text.split(" ");
         const payload = parts.length > 1 ? parts[1] : null;
-
+ 
         console.log("START payload:", payload);
-
+ 
         if (payload) {
           const token = payload.trim();
           journeyTokensByChat.set(String(chatId), token);
-          
+ 
           await sendMessage(chatId, "מחפש את מסע המטופל שלך...");
-
+ 
           try {
-   const response = await fetch(
-  "https://dental-consult-efac37c8.base44.app/api/functions/getPatientJourneyByToken",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
-    },
-    body: JSON.stringify({ token }),
-  }
-);
-
-console.log("Base44 HTTP status:", response.status, response.statusText);
-            
-const envelope = await response.json();
-console.log("Base44 raw result:", JSON.stringify(envelope, null, 2));
-
-const result = envelope?.data ?? envelope ?? {};
-const journeyData =
-  result?.data ??
-  (result?.public_token ? result : null);
-
-const found =
-  result?.found === true ||
-  !!journeyData;
-
-if (!found) {
-  await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
-  return res.sendStatus(200);
-}
-await sendMessage(
-  chatId,
-  "👋 נמצא עבורך תהליך שיקום הפה!\nמה תרצה לעשות?",
-  {
-    inline_keyboard: [
-      [
-        { text: "📅 קביעת תור", callback_data: "flow:journey_booking" }
-      ],
-      [
-        { text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }
-      ],
-      [
-        { text: "☎️ יצירת קשר", callback_data: "CONTACT" }
-      ]
-    ]
-  }
-);
-console.log("PatientJourney found:", JSON.stringify(journeyData, null, 2));
-return res.sendStatus(200);
+            const response = await fetch(
+              "https://dental-consult-efac37c8.base44.app/api/functions/getPatientJourneyByToken",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
+                },
+                body: JSON.stringify({ token }),
+              }
+            );
+ 
+            console.log("Base44 HTTP status:", response.status, response.statusText);
+ 
+            const envelope = await response.json();
+            console.log("Base44 raw result:", JSON.stringify(envelope, null, 2));
+ 
+            const result = envelope?.data ?? envelope ?? {};
+            const journeyData =
+              result?.data ??
+              (result?.public_token ? result : null);
+ 
+            const found =
+              result?.found === true ||
+              !!journeyData;
+ 
+            if (!found) {
+              await sendMessage(chatId, "❌ לא נמצא תהליך עבור הקישור שסופק.");
+              return res.sendStatus(200);
+            }
+ 
+            await sendMessage(
+              chatId,
+              "👋 נמצא עבורך תהליך שיקום הפה!\nמה תרצה לעשות?",
+              {
+                inline_keyboard: [
+                  [{ text: "📅 קביעת תור", callback_data: "flow:journey_booking" }],
+                  [{ text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }],
+                  [{ text: "☎️ יצירת קשר", callback_data: "CONTACT" }]
+                ]
+              }
+            );
+ 
+            console.log("PatientJourney found:", JSON.stringify(journeyData, null, 2));
+            return res.sendStatus(200);
+ 
           } catch (error) {
             console.error("Base44 error:", error);
             await sendMessage(chatId, "⚠️ אירעה שגיאה בעת בדיקת הקישור.");
@@ -866,24 +824,14 @@ return res.sendStatus(200);
         }
       }
     }
-
-    // Callback buttons
-    if (update.callback_query) {
-      const callback = update.callback_query;
-      const chatId = callback.message.chat.id;
-      const messageId = callback.message.message_id;
-      const data = callback.data;
-
-      await handleCallback(chatId, messageId, callback.id, data);
-      return res.sendStatus(200);
-    }
-
+ 
     return res.sendStatus(200);
   } catch (error) {
     console.error("Webhook error:", error);
     return res.sendStatus(200);
   }
 });
+ 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
