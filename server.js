@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: slot-debug-v1");
+console.log("SERVER VERSION: integration-v2");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -70,6 +70,43 @@ async function answerCallbackQuery(callbackQueryId, text = "") {
 // ===== Journey Token Helper =====
 function getJourneyTokenFromSession(chatId) {
   return journeyTokensByChat.get(String(chatId)) || null;
+}
+
+// ===== New Integration Functions =====
+async function fetchBotJourneyInfo(token) {
+  const response = await fetch(
+    "https://preview--dental-consult-efac37c8.base44.app/api/functions/getBotJourneyInfo",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api_key": "9f3162fa351041b1bfa5e5921ec3d28c",
+      },
+      body: JSON.stringify({ token }),
+    }
+  );
+
+  const envelope = await response.json();
+  return envelope?.data ?? envelope ?? {};
+}
+
+async function fetchAvailableSlotsFromSystem2(specialtyKey) {
+  const response = await fetch(
+    "https://69b792dd54c7935ae7606aaa.base44.app/api/functions/getAvailableSlotsForSpecialty",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-service-key": "dental-consult-service-2026"
+      },
+      body: JSON.stringify({ 
+        specialty_key: specialtyKey
+      }),
+    }
+  );
+
+  const envelope = await response.json();
+  return envelope?.slots ?? [];
 }
  
 async function fetchJourneyAvailableSlots(token) {
@@ -448,34 +485,47 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     return handleFlowSelection(chatId, messageId, flowCode);
   }
  
-  // Slots — קריאה לפונקציה האמיתית ב-Base44
+  // Slots — קריאה לשתי המערכות בנפרד
   if (data === "booking:show_slots") {
-    await editMessage(chatId, messageId, "🔍 טוען תורים זמינים...");
- 
+    await editMessage(chatId, messageId, "🔍 טוען מידע על התור שלך...");
+
     const token = getJourneyTokenFromSession(chatId);
     if (!token) {
       return editMessage(chatId, messageId, "❌ לא נמצא טוקן פעיל.", {
         inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
       });
     }
- 
-    const slotsResult = await fetchJourneyAvailableSlots(token);
-    console.log("SLOTS RESULT:", JSON.stringify(slotsResult, null, 2));
- 
-    const slots = Array.isArray(slotsResult?.slots) ? slotsResult.slots : [];
- 
-    if (slots.length === 0) {
+
+    // צעד 1: קרא מידע על המסע מאפליקציה 1
+    const journeyInfo = await fetchBotJourneyInfo(token);
+    console.log("JOURNEY INFO:", JSON.stringify(journeyInfo, null, 2));
+
+    if (!journeyInfo?.success || !journeyInfo?.bot_specialty_key) {
+      return editMessage(chatId, messageId, "❌ לא ניתן למצוא מידע על המסע.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+
+    // צעד 2: קרא תורים ישירות מאפליקציה 2
+    const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_specialty_key);
+    
+    console.log("SLOTS FROM SYSTEM 2:", JSON.stringify(slots, null, 2));
+
+    // שמור את פרטי המטופל לשימוש במהלך קביעת התור
+    journeyTokensByChat.set(String(chatId) + "_patient_info", JSON.stringify(journeyInfo.patient));
+
+    if (!slots || slots.length === 0) {
       return editMessage(chatId, messageId, "😔 כרגע אין תורים זמינים.\nנסה שוב מאוחר יותר.", {
         inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
       });
     }
- 
+
     const slotRows = slots.slice(0, 8).map((slot) => [{
       text: `${slot.slot_date || ""} ${slot.slot_time || ""} | ${slot.provider_name || ""}`,
       callback_data: `slot:${slot.id}`,
     }]);
     slotRows.push([{ text: "🔙 חזרה", callback_data: "nav:main" }]);
- 
+
     return editMessage(chatId, messageId, "📅 בחר תור:", {
       inline_keyboard: slotRows
     });
@@ -483,22 +533,27 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
  
   // קביעת תור — קריאה ל-createJourneyBooking ב-Base44
   if (data.startsWith("slot:")) {
-    const slotId = data.slice(5); // הכל אחרי "slot:"
+    const slotId = data.slice(5);
     const token = getJourneyTokenFromSession(chatId);
- 
+    const patientInfoStr = journeyTokensByChat.get(String(chatId) + "_patient_info");
+
     await editMessage(chatId, messageId, "⏳ שומר את התור שבחרת...");
- 
+
     if (!token) {
       return editMessage(chatId, messageId, "❌ לא נמצא טוקן פעיל.", {
         inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
       });
     }
- 
+
     const result = await createJourneyBookingRecord(token, slotId);
     console.log("CREATE BOOKING RESULT:", JSON.stringify(result, null, 2));
- 
+
     if (result?.success) {
       const b = result.booking || {};
+      const patientInfo = patientInfoStr ? JSON.parse(patientInfoStr) : {};
+      
+      console.log("BOOKING FOR PATIENT:", patientInfo.full_name, "| ID:", patientInfo.id_number, "| Phone:", patientInfo.phone);
+      
       return editMessage(
         chatId,
         messageId,
@@ -511,7 +566,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
         }
       );
     }
- 
+
     return editMessage(chatId, messageId, "❌ לא ניתן לקבוע את התור כרגע. נסה שוב.", {
       inline_keyboard: [
         [{ text: "🔄 הצג תורים", callback_data: "booking:show_slots" }],
