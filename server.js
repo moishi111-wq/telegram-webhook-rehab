@@ -90,7 +90,7 @@ async function fetchBotJourneyInfo(token) {
   return envelope?.data ?? envelope ?? {};
 }
 
-async function fetchAvailableSlotsFromSystem2(specialtyKey) {
+async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
   const response = await fetch(
     "https://69b792dd54c7935ae7606aaa.base44.app/api/functions/getAvailableSlotsForSpecialty",
     {
@@ -99,8 +99,8 @@ async function fetchAvailableSlotsFromSystem2(specialtyKey) {
         "Content-Type": "application/json",
         "x-service-key": "dental-consult-service-2026"
       },
- body: JSON.stringify({ 
-  bot_treatment_key: botTreatmentKey
+      body: JSON.stringify({ 
+        bot_treatment_key: botTreatmentKey
       }),
     }
   );
