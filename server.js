@@ -91,6 +91,10 @@ async function fetchBotJourneyInfo(token) {
 }
 
 async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
+  const requestBody = { bot_treatment_key: botTreatmentKey };
+  console.log("REQUEST TO SYSTEM 2 - botTreatmentKey:", botTreatmentKey);
+  console.log("REQUEST TO SYSTEM 2 - body:", JSON.stringify(requestBody));
+  
   const response = await fetch(
     "https://69b792dd54c7935ae7606aaa.base44.app/api/functions/getAvailableSlotsForSpecialty",
     {
@@ -99,16 +103,16 @@ async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
         "Content-Type": "application/json",
         "x-service-key": "dental-consult-service-2026"
       },
-      body: JSON.stringify({ 
-        bot_treatment_key: botTreatmentKey
-      }),
+      body: JSON.stringify(requestBody),
     }
   );
 
+  console.log("SYSTEM 2 HTTP status:", response.status);
   const envelope = await response.json();
+  console.log("SYSTEM 2 RAW RESPONSE:", JSON.stringify(envelope, null, 2));
   return envelope?.slots ?? [];
 }
- 
+
 async function fetchJourneyAvailableSlots(token) {
   const response = await fetch(
     "https://dental-consult-efac37c8.base44.app/api/functions/getJourneyAvailableSlots",
