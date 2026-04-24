@@ -99,8 +99,8 @@ async function fetchAvailableSlotsFromSystem2(specialtyKey) {
         "Content-Type": "application/json",
         "x-service-key": "dental-consult-service-2026"
       },
-      body: JSON.stringify({ 
-        specialty_key: specialtyKey
+ body: JSON.stringify({ 
+  bot_treatment_key: botTreatmentKey
       }),
     }
   );
@@ -507,8 +507,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     }
 
     // צעד 2: קרא תורים ישירות מאפליקציה 2
-    const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_specialty_key);
-    
+const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_treatment_key);    
     console.log("SLOTS FROM SYSTEM 2:", JSON.stringify(slots, null, 2));
 
     // שמור את פרטי המטופל לשימוש במהלך קביעת התור
