@@ -96,8 +96,8 @@ async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
   console.log("REQUEST TO SYSTEM 2 - body:", JSON.stringify(requestBody));
   
   const response = await fetch(
-    "https://69b792dd54c7935ae7606aaa.base44.app/api/functions/getAvailableSlotsForSpecialty",
-    {
+"https://rehab-dent-admin.base44.app/api/functions/getAvailableSlotsForSpecialty"
+   {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
