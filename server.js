@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v3");
+console.log("SERVER VERSION: integration-v4-bookslot");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -111,6 +111,37 @@ async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
   const envelope = await response.json();
   console.log("SYSTEM 2 RAW RESPONSE:", JSON.stringify(envelope, null, 2));
   return envelope?.slots ?? [];
+}
+
+// ===== NEW: Book slot in System 2 with patient info =====
+async function bookSlotInSystem2(slotId, patientInfo) {
+  const requestBody = {
+    slot_id: slotId,
+    patient_name: patientInfo?.full_name || "",
+    patient_id: patientInfo?.id_number || "",
+    phone: patientInfo?.phone || "",
+    booking_source: "telegram",
+    action: "confirm"
+  };
+  
+  console.log("BOOK SLOT IN SYSTEM 2 - body:", JSON.stringify(requestBody));
+
+  const response = await fetch(
+    "https://rehab-dent-admin.base44.app/api/functions/bookSlot",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-service-key": "dental-consult-service-2026"
+      },
+      body: JSON.stringify(requestBody),
+    }
+  );
+
+  console.log("BOOK SLOT HTTP status:", response.status);
+  const envelope = await response.json();
+  console.log("BOOK SLOT RAW RESPONSE:", JSON.stringify(envelope, null, 2));
+  return envelope;
 }
 
 async function fetchJourneyAvailableSlots(token) {
@@ -534,7 +565,9 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     });
   }
  
-  // קביעת תור — קריאה ל-createJourneyBooking ב-Base44
+  // קביעת תור — שתי קריאות:
+  // 1. bookSlot ב-System 2 (יצירת Booking + סימון slot כתפוס + שמירת פרטי מטופל)
+  // 2. createJourneyBooking ב-System A (עדכון מסע המטופל)
   if (data.startsWith("slot:")) {
     const slotId = data.slice(5);
     const token = getJourneyTokenFromSession(chatId);
@@ -548,19 +581,34 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
+    const patientInfo = patientInfoStr ? JSON.parse(patientInfoStr) : {};
+    console.log("BOOKING FOR PATIENT:", patientInfo.full_name, "| ID:", patientInfo.id_number, "| Phone:", patientInfo.phone);
+
+    // קריאה 1: bookSlot ב-System 2 (יצירת Booking + עדכון slot כתפוס)
+    const system2Result = await bookSlotInSystem2(slotId, patientInfo);
+    console.log("SYSTEM 2 BOOK RESULT:", JSON.stringify(system2Result, null, 2));
+
+    if (!system2Result?.success) {
+      const errorMsg = system2Result?.error || "שגיאה לא ידועה";
+      return editMessage(chatId, messageId, `❌ לא ניתן לקבוע את התור כרגע.\nשגיאה: ${errorMsg}`, {
+        inline_keyboard: [
+          [{ text: "🔄 הצג תורים", callback_data: "booking:show_slots" }],
+          [{ text: "🔙 חזרה", callback_data: "nav:main" }]
+        ]
+      });
+    }
+
+    // קריאה 2: createJourneyBooking ב-System A (עדכון מסע המטופל)
     const result = await createJourneyBookingRecord(token, slotId);
     console.log("CREATE BOOKING RESULT:", JSON.stringify(result, null, 2));
 
     if (result?.success) {
       const b = result.booking || {};
-      const patientInfo = patientInfoStr ? JSON.parse(patientInfoStr) : {};
-      
-      console.log("BOOKING FOR PATIENT:", patientInfo.full_name, "| ID:", patientInfo.id_number, "| Phone:", patientInfo.phone);
       
       return editMessage(
         chatId,
         messageId,
-        `✅ התור נקבע בהצלחה!\n\n📅 ${b.slot_date || ""}\n🕒 ${b.slot_time || ""}\n👨‍⚕️ ${b.provider_name || ""}`,
+        `✅ התור נקבע בהצלחה!\n\n📅 ${system2Result.date || b.slot_date || ""}\n🕒 ${system2Result.time || b.slot_time || ""}\n👨‍⚕️ ${system2Result.doctor_name || b.provider_name || ""}\n\nשם: ${patientInfo.full_name || ""}\nטלפון: ${patientInfo.phone || ""}`,
         {
           inline_keyboard: [
             [{ text: "📋 צפה בתור", callback_data: "booking:view" }],
