@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v2");
+console.log("SERVER VERSION: integration-v3");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -94,10 +94,10 @@ async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
   const requestBody = { bot_treatment_key: botTreatmentKey };
   console.log("REQUEST TO SYSTEM 2 - botTreatmentKey:", botTreatmentKey);
   console.log("REQUEST TO SYSTEM 2 - body:", JSON.stringify(requestBody));
-  
+
   const response = await fetch(
-"https://rehab-dent-admin.base44.app/api/functions/getAvailableSlotsForSpecialty"
-   {
+    "https://rehab-dent-admin.base44.app/api/functions/getAvailableSlotsForSpecialty",
+    {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -511,7 +511,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     }
 
     // צעד 2: קרא תורים ישירות מאפליקציה 2
-const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_treatment_key);    
+    const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_treatment_key);
     console.log("SLOTS FROM SYSTEM 2:", JSON.stringify(slots, null, 2));
 
     // שמור את פרטי המטופל לשימוש במהלך קביעת התור
@@ -524,7 +524,7 @@ const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_treatment_key
     }
 
     const slotRows = slots.slice(0, 8).map((slot) => [{
-      text: `${slot.slot_date || ""} ${slot.slot_time || ""} | ${slot.provider_name || ""}`,
+      text: `${slot.date || ""} ${slot.start_time || ""} | ${slot.doctor_name || ""}`,
       callback_data: `slot:${slot.id}`,
     }]);
     slotRows.push([{ text: "🔙 חזרה", callback_data: "nav:main" }]);
