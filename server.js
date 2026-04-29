@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v4-bookslot-cancel");
+console.log("SERVER VERSION: integration-v5-cancel-fix-full");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -144,9 +144,9 @@ async function bookSlotInSystem2(slotId, patientInfo) {
   return envelope;
 }
 
-// ===== NEW: Cancel Booking in System 2 =====
-async function cancelBookingInSystem2(bookingId) {
-  const requestBody = { booking_id: bookingId };
+// ===== NEW: Cancel Booking by slot_id =====
+async function cancelBookingInSystem2(slotId) {
+  const requestBody = { slot_id: slotId };
   console.log("CANCEL BOOKING IN SYSTEM 2 - body:", JSON.stringify(requestBody));
 
   const response = await fetch(
@@ -211,6 +211,7 @@ async function sendJourneyBookingMenu(chatId, messageId, token) {
   let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
   console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
  
+  // מניעת כפילות: מציג את התור הקיים אם יש אחד
   if (
     (bookingState?.success && bookingState?.exists && bookingState?.booking) ||
     localBooking
@@ -470,18 +471,18 @@ async function handleStart(chatId) {
 }
  
 async function handleFlowSelection(chatId, messageId, flowCode) {
+  // UPDATED: מניעת עקיפה וכפילויות בניווט מהתפריט הראשי
   if (flowCode === "journey_booking") {
-    return editMessage(
-      chatId,
-      messageId,
-      "🔍 מאתר עבורך תורים מתאימים...",
-      {
-        inline_keyboard: [
-          [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
-          [{ text: "🏠 חזרה", callback_data: "nav:main" }]
-        ]
-      }
-    );
+    const token = getJourneyTokenFromSession(chatId);
+    if (!token) {
+      return editMessage(
+        chatId,
+        messageId,
+        "❌ לא נמצא טוקן פעיל למסע המטופל.",
+        backToMainKeyboard()
+      );
+    }
+    return sendJourneyBookingMenu(chatId, messageId, token);
   }
  
   if (flowCode === "rehab_exam") {
@@ -588,7 +589,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     });
   }
 
-  // --- NEW: Cancel Booking Flow ---
+  // --- NEW: Cancel Booking by slot_id ---
   if (data === "booking:cancel") {
     await editMessage(chatId, messageId, "⏳ מבטל את התור...");
     
@@ -599,7 +600,6 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // הבאת פרטי התור הנוכחי כדי לשלוף את ה-ID הרלוונטי לביטול ב-System 2
     const bookingState = await fetchJourneyBookingState(token);
     const localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
     const b = bookingState?.booking || localBooking;
@@ -610,22 +610,17 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // אנחנו מנסים לחלץ את המזהה ש-System 2 מכירה. ייתכן ו-System A שומרת אותו ב-booking_id, external_id או פשוט ב-id.
-    const bookingIdToCancel = b.external_booking_id || b.booking_id || b.id;
-    console.log("Attempting to cancel booking with ID:", bookingIdToCancel);
-
-    if (!bookingIdToCancel) {
-      return editMessage(chatId, messageId, "❌ לא נמצא מזהה הזמנה תקין לביטול.", {
+    // חילוץ ה-slot_id לטובת הביטול (השדה ש-System 2 עודכנה לעבוד מולו)
+    const slotIdToCancel = b.slot_id;
+    if (!slotIdToCancel) {
+      return editMessage(chatId, messageId, "❌ לא נמצא מזהה משבצת תקין לביטול.", {
         inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
       });
     }
 
-    // קריאה למערכת 2 כדי לשחרר את הסלוט
-    const cancelResult = await cancelBookingInSystem2(bookingIdToCancel);
-    console.log("CANCEL RESULT IN BOT:", JSON.stringify(cancelResult, null, 2));
+    const cancelResult = await cancelBookingInSystem2(slotIdToCancel);
 
     if (cancelResult?.success) {
-      // הסרת הסטייט המקומי של התור (בהמשך נוסיף גם קריאה ל-System A כדי לעדכן שם שהתור בוטל)
       journeyTokensByChat.delete(String(chatId) + "_booking");
       
       return editMessage(chatId, messageId, "✅ התור בוטל בהצלחה והמועד חזר להיות זמין במערכת.", {
@@ -638,11 +633,8 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
   }
-  // --- END NEW: Cancel Booking Flow ---
  
-  // קביעת תור — שתי קריאות:
-  // 1. bookSlot ב-System 2 (יצירת Booking + סימון slot כתפוס + שמירת פרטי מטופל)
-  // 2. createJourneyBooking ב-System A (עדכון מסע המטופל)
+  // קביעת תור
   if (data.startsWith("slot:")) {
     const slotId = data.slice(5);
     const token = getJourneyTokenFromSession(chatId);
@@ -659,7 +651,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     const patientInfo = patientInfoStr ? JSON.parse(patientInfoStr) : {};
     console.log("BOOKING FOR PATIENT:", patientInfo.full_name, "| ID:", patientInfo.id_number, "| Phone:", patientInfo.phone);
 
-    // קריאה 1: bookSlot ב-System 2 (יצירת Booking + עדכון slot כתפוס)
+    // קריאה 1: bookSlot ב-System 2
     const system2Result = await bookSlotInSystem2(slotId, patientInfo);
     console.log("SYSTEM 2 BOOK RESULT:", JSON.stringify(system2Result, null, 2));
 
@@ -673,12 +665,21 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // קריאה 2: createJourneyBooking ב-System A (עדכון מסע המטופל)
+    // קריאה 2: createJourneyBooking ב-System A
     const result = await createJourneyBookingRecord(token, slotId);
     console.log("CREATE BOOKING RESULT:", JSON.stringify(result, null, 2));
 
     if (result?.success) {
       const b = result.booking || {};
+      
+      // שמירה ב-cache כדי למנוע כפילויות תורים בהמשך
+      journeyTokensByChat.set(String(chatId) + "_booking", {
+        slot_date: system2Result.date || b.slot_date || "",
+        slot_time: system2Result.time || b.slot_time || "",
+        provider_name: system2Result.doctor_name || b.provider_name || "",
+        location_name: b.location_name || "",
+        slot_id: slotId
+      });
       
       return editMessage(
         chatId,
