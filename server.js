@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v5-cancel-fix-full");
+console.log("SERVER VERSION: integration-v6-booking-flow-fix");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -194,8 +194,8 @@ async function createJourneyBookingRecord(token, slotId) {
       },
       body: JSON.stringify({
         token,
-        slot_id: slotId, 
-        external_slot_id: slotId, // <--- התיקון: מעבירים את המזהה גם לכאן
+        slot_id: slotId,
+        external_slot_id: slotId,
         booking_source: "telegram",
       }),
     }
@@ -233,35 +233,15 @@ async function sendJourneyBookingMenu(chatId, messageId, token) {
     );
   }
  
-  const journey = await fetchPatientJourneyByToken(token);
-  console.log("DEBUG journey:", JSON.stringify(journey, null, 2));
-  const step = journey?.current_step || journey?.step || {};
- 
-  const isBookingEnabled =
-    step?.booking_channel ||
-    step?.procedure_type_mapping_id ||
-    step?.recommended_doctor_id;
- 
-  if (!isBookingEnabled) {
-    return editMessage(
-      chatId,
-      messageId,
-      "📌 בשלב זה אין אפשרות לקבוע תור דרך הבוט.\n\nאם יידרש תיאום תור — תקבל הנחיה בהמשך.",
-      {
-        inline_keyboard: [
-          [{ text: "⬅️ חזרה", callback_data: "nav:main" }]
-        ]
-      }
-    );
-  }
- 
+  // התור לא קיים. מדלגים על בדיקת השדה current_step בגלל שהוא חסר ב-API.
   return editMessage(
     chatId,
     messageId,
     "📅 ניתן לקבוע תור עבור שלב זה.\n\nבחר:",
     {
       inline_keyboard: [
-        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }]
+        [{ text: "📅 הצג תורים זמינים", callback_data: "booking:show_slots" }],
+        [{ text: "🏠 חזרה לתפריט", callback_data: "nav:main" }]
       ]
     }
   );
@@ -472,7 +452,8 @@ async function handleStart(chatId) {
 }
  
 async function handleFlowSelection(chatId, messageId, flowCode) {
-  // UPDATED: מניעת עקיפה וכפילויות בניווט מהתפריט הראשי
+  // נשאר הניתוב ל-sendJourneyBookingMenu כדי לחסום כפילויות, 
+  // אבל הפונקציה עצמה תוקנה כדי לאשר את המשך התהליך.
   if (flowCode === "journey_booking") {
     const token = getJourneyTokenFromSession(chatId);
     if (!token) {
@@ -590,7 +571,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     });
   }
 
-  // --- NEW: Cancel Booking by slot_id ---
+  // --- Cancel Booking by slot_id ---
   if (data === "booking:cancel") {
     await editMessage(chatId, messageId, "⏳ מבטל את התור...");
     
@@ -612,7 +593,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     }
 
     // חילוץ ה-slot_id לטובת הביטול (השדה ש-System 2 עודכנה לעבוד מולו)
-    const slotIdToCancel = b.slot_id;
+    const slotIdToCancel = b.external_slot_id || b.slot_id;
     if (!slotIdToCancel) {
       return editMessage(chatId, messageId, "❌ לא נמצא מזהה משבצת תקין לביטול.", {
         inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
@@ -679,7 +660,8 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
         slot_time: system2Result.time || b.slot_time || "",
         provider_name: system2Result.doctor_name || b.provider_name || "",
         location_name: b.location_name || "",
-        slot_id: slotId
+        slot_id: slotId,
+        external_slot_id: slotId
       });
       
       return editMessage(
@@ -986,7 +968,7 @@ app.post("/telegram/webhook", async (req, res) => {
               "👋 נמצא עבורך תהליך שיקום הפה!\nמה תרצה לעשות?",
               {
                 inline_keyboard: [
-                  [{ text: "📅 קביעת תור", callback_data: "flow:journey_booking" }],
+                  [{ text: "📅 קביעת/ניהול תור", callback_data: "flow:journey_booking" }],
                   [{ text: "📄 צפייה בפרטים", callback_data: "VIEW_DETAILS" }],
                   [{ text: "☎️ יצירת קשר", callback_data: "CONTACT" }]
                 ]
