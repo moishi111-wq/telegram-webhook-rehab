@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v4-bookslot");
+console.log("SERVER VERSION: integration-v4-bookslot-cancel");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -141,6 +141,29 @@ async function bookSlotInSystem2(slotId, patientInfo) {
   console.log("BOOK SLOT HTTP status:", response.status);
   const envelope = await response.json();
   console.log("BOOK SLOT RAW RESPONSE:", JSON.stringify(envelope, null, 2));
+  return envelope;
+}
+
+// ===== NEW: Cancel Booking in System 2 =====
+async function cancelBookingInSystem2(bookingId) {
+  const requestBody = { booking_id: bookingId };
+  console.log("CANCEL BOOKING IN SYSTEM 2 - body:", JSON.stringify(requestBody));
+
+  const response = await fetch(
+    "https://rehab-dent-admin.base44.app/api/functions/cancelBooking",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-service-key": "dental-consult-service-2026"
+      },
+      body: JSON.stringify(requestBody),
+    }
+  );
+
+  console.log("CANCEL BOOKING HTTP status:", response.status);
+  const envelope = await response.json();
+  console.log("CANCEL BOOKING RAW RESPONSE:", JSON.stringify(envelope, null, 2));
   return envelope;
 }
 
@@ -564,6 +587,58 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       inline_keyboard: slotRows
     });
   }
+
+  // --- NEW: Cancel Booking Flow ---
+  if (data === "booking:cancel") {
+    await editMessage(chatId, messageId, "⏳ מבטל את התור...");
+    
+    const token = getJourneyTokenFromSession(chatId);
+    if (!token) {
+      return editMessage(chatId, messageId, "❌ לא נמצא טוקן פעיל.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+
+    // הבאת פרטי התור הנוכחי כדי לשלוף את ה-ID הרלוונטי לביטול ב-System 2
+    const bookingState = await fetchJourneyBookingState(token);
+    const localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
+    const b = bookingState?.booking || localBooking;
+
+    if (!b) {
+      return editMessage(chatId, messageId, "❌ לא נמצא תור פעיל לביטול.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+
+    // אנחנו מנסים לחלץ את המזהה ש-System 2 מכירה. ייתכן ו-System A שומרת אותו ב-booking_id, external_id או פשוט ב-id.
+    const bookingIdToCancel = b.external_booking_id || b.booking_id || b.id;
+    console.log("Attempting to cancel booking with ID:", bookingIdToCancel);
+
+    if (!bookingIdToCancel) {
+      return editMessage(chatId, messageId, "❌ לא נמצא מזהה הזמנה תקין לביטול.", {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+
+    // קריאה למערכת 2 כדי לשחרר את הסלוט
+    const cancelResult = await cancelBookingInSystem2(bookingIdToCancel);
+    console.log("CANCEL RESULT IN BOT:", JSON.stringify(cancelResult, null, 2));
+
+    if (cancelResult?.success) {
+      // הסרת הסטייט המקומי של התור (בהמשך נוסיף גם קריאה ל-System A כדי לעדכן שם שהתור בוטל)
+      journeyTokensByChat.delete(String(chatId) + "_booking");
+      
+      return editMessage(chatId, messageId, "✅ התור בוטל בהצלחה והמועד חזר להיות זמין במערכת.", {
+        inline_keyboard: [[{ text: "🏠 חזרה לתפריט הראשי", callback_data: "nav:main" }]]
+      });
+    } else {
+      const errorMsg = cancelResult?.error || "שגיאה לא ידועה מול מערכת הניהול.";
+      return editMessage(chatId, messageId, `❌ אירעה שגיאה בביטול התור.\nסיבה: ${errorMsg}`, {
+        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
+      });
+    }
+  }
+  // --- END NEW: Cancel Booking Flow ---
  
   // קביעת תור — שתי קריאות:
   // 1. bookSlot ב-System 2 (יצירת Booking + סימון slot כתפוס + שמירת פרטי מטופל)
