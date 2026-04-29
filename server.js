@@ -194,7 +194,8 @@ async function createJourneyBookingRecord(token, slotId) {
       },
       body: JSON.stringify({
         token,
-        slot_id: slotId,
+        slot_id: slotId, 
+        external_slot_id: slotId, // <--- התיקון: מעבירים את המזהה גם לכאן
         booking_source: "telegram",
       }),
     }
