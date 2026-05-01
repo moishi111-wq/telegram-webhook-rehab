@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v6-booking-flow-fix");
+console.log("SERVER VERSION: integration-v7-cache-merge-full");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -195,7 +195,7 @@ async function createJourneyBookingRecord(token, slotId) {
       body: JSON.stringify({
         token,
         slot_id: slotId,
-        external_slot_id: slotId,
+        external_slot_id: slotId, // UPDATED
         booking_source: "telegram",
       }),
     }
@@ -212,17 +212,21 @@ async function sendJourneyBookingMenu(chatId, messageId, token) {
   let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
   console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
  
-  // מניעת כפילות: מציג את התור הקיים אם יש אחד
-  if (
-    (bookingState?.success && bookingState?.exists && bookingState?.booking) ||
-    localBooking
-  ) {
-    const b = bookingState?.booking || localBooking;
+  const hasSystemABooking = bookingState?.success && bookingState?.exists && bookingState?.booking;
+
+  if (hasSystemABooking || localBooking) {
+    const sysA = bookingState?.booking || {};
+    const b = {
+      slot_date: sysA.slot_date || localBooking?.slot_date || "-",
+      slot_time: sysA.slot_time || localBooking?.slot_time || "-",
+      provider_name: sysA.provider_name || localBooking?.provider_name || "-",
+      location_name: sysA.location_name || localBooking?.location_name || "-",
+    };
  
     return editMessage(
       chatId,
       messageId,
-      `🏥 יש לך תור קיים\n\n📅 ${b.slot_date || "-"}\n🕒 ${b.slot_time || "-"}\n👨‍⚕️ ${b.provider_name || "-"}\n📍 ${b.location_name || "-"}`,
+      `🏥 יש לך תור קיים\n\n📅 ${b.slot_date}\n🕒 ${b.slot_time}\n👨‍⚕️ ${b.provider_name}\n📍 ${b.location_name}`,
       {
         inline_keyboard: [
           [{ text: "📋 צפה בהזמנה", callback_data: "booking:view" }],
@@ -452,8 +456,6 @@ async function handleStart(chatId) {
 }
  
 async function handleFlowSelection(chatId, messageId, flowCode) {
-  // נשאר הניתוב ל-sendJourneyBookingMenu כדי לחסום כפילויות, 
-  // אבל הפונקציה עצמה תוקנה כדי לאשר את המשך התהליך.
   if (flowCode === "journey_booking") {
     const token = getJourneyTokenFromSession(chatId);
     if (!token) {
@@ -571,7 +573,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     });
   }
 
-  // --- Cancel Booking by slot_id ---
+  // --- Cancel Booking ---
   if (data === "booking:cancel") {
     await editMessage(chatId, messageId, "⏳ מבטל את התור...");
     
@@ -584,16 +586,10 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
 
     const bookingState = await fetchJourneyBookingState(token);
     const localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
-    const b = bookingState?.booking || localBooking;
-
-    if (!b) {
-      return editMessage(chatId, messageId, "❌ לא נמצא תור פעיל לביטול.", {
-        inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
-      });
-    }
-
-    // חילוץ ה-slot_id לטובת הביטול (השדה ש-System 2 עודכנה לעבוד מולו)
-    const slotIdToCancel = b.external_slot_id || b.slot_id;
+    const sysA = bookingState?.booking || {};
+    
+    const slotIdToCancel = sysA.external_slot_id || localBooking?.external_slot_id || localBooking?.slot_id;
+    
     if (!slotIdToCancel) {
       return editMessage(chatId, messageId, "❌ לא נמצא מזהה משבצת תקין לביטול.", {
         inline_keyboard: [[{ text: "🔙 חזרה", callback_data: "nav:main" }]]
@@ -615,8 +611,17 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
   }
+
+  // --- View Booking Details ---
+  if (data === "booking:view") {
+    const token = getJourneyTokenFromSession(chatId);
+    if (!token) return answerCallbackQuery(callbackQueryId, "❌ לא נמצא טוקן");
+    return sendJourneyBookingMenu(chatId, messageId, token);
+  }
  
-  // קביעת תור
+  // קביעת תור — שתי קריאות:
+  // 1. bookSlot ב-System 2 (יצירת Booking + סימון slot כתפוס + שמירת פרטי מטופל)
+  // 2. createJourneyBooking ב-System A (עדכון מסע המטופל)
   if (data.startsWith("slot:")) {
     const slotId = data.slice(5);
     const token = getJourneyTokenFromSession(chatId);
@@ -633,7 +638,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     const patientInfo = patientInfoStr ? JSON.parse(patientInfoStr) : {};
     console.log("BOOKING FOR PATIENT:", patientInfo.full_name, "| ID:", patientInfo.id_number, "| Phone:", patientInfo.phone);
 
-    // קריאה 1: bookSlot ב-System 2
+    // קריאה 1: bookSlot ב-System 2 (יצירת Booking + עדכון slot כתפוס)
     const system2Result = await bookSlotInSystem2(slotId, patientInfo);
     console.log("SYSTEM 2 BOOK RESULT:", JSON.stringify(system2Result, null, 2));
 
@@ -647,14 +652,13 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // קריאה 2: createJourneyBooking ב-System A
+    // קריאה 2: createJourneyBooking ב-System A (עדכון מסע המטופל)
     const result = await createJourneyBookingRecord(token, slotId);
     console.log("CREATE BOOKING RESULT:", JSON.stringify(result, null, 2));
 
     if (result?.success) {
       const b = result.booking || {};
       
-      // שמירה ב-cache כדי למנוע כפילויות תורים בהמשך
       journeyTokensByChat.set(String(chatId) + "_booking", {
         slot_date: system2Result.date || b.slot_date || "",
         slot_time: system2Result.time || b.slot_time || "",
