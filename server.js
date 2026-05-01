@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v9-whatsapp-fallback");
+console.log("SERVER VERSION: integration-v10-dynamic-whatsapp");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -174,15 +174,26 @@ async function cancelBookingInSystem2(slotId) {
   return envelope;
 }
 
-// ===== WhatsApp Fallback UI =====
-function getWhatsAppButton(patientInfo) {
+// ===== WhatsApp Fallback UI (Updated dynamically) =====
+function getWhatsAppButton(patientInfo, treatmentKey = "") {
   // החלף את המספר למטה במספר האמיתי של המחלקה (כולל 972 בהתחלה וללא 0)
-  const CLINIC_PHONE_NUMBER = "972524760332"; 
+  const CLINIC_PHONE_NUMBER = "972500000000"; 
   
   const patientId = patientInfo?.id_number || "לא ידוע";
   const patientName = patientInfo?.full_name || "מטופל";
   
-  const rawMessage = `שלום, שמי ${patientName} (ת.ז: ${patientId}). אני מנסה לקבוע תור לשיקום הפה דרך הבוט ולא מצאתי מועד מתאים. אשמח לעזרה מול המזכירות.`;
+  // מיפוי מפתחות הטיפול לשמות קריאים בעברית
+  const treatmentMap = {
+    "endo_exam": "בדיקת אנדודונט",
+    "rehab_exam": "בדיקה שיקומית",
+    "rehab_doctor": "תור לרופא משקם",
+    "rehab_followup": "המשך טיפול"
+  };
+  
+  // שימוש בשם המתורגם או ברירת מחדל
+  const treatmentName = treatmentMap[treatmentKey] || "המשך טיפול";
+  
+  const rawMessage = `שלום, שמי ${patientName} (ת.ז: ${patientId}). אני מנסה לקבוע ${treatmentName} דרך הבוט ולא מצאתי מועד מתאים. אשמח לעזרה מול המזכירות.`;
   const encodedMessage = encodeURIComponent(rawMessage);
   const waUrl = `https://wa.me/${CLINIC_PHONE_NUMBER}?text=${encodedMessage}`;
   
@@ -476,17 +487,20 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     return sendJourneyBookingMenu(chatId, messageId, token);
   }
 
-  // --- NEW: Handle "CONTACT" action from main menu ---
+  // --- Handle "CONTACT" action from main menu ---
   if (data === "CONTACT") {
     const token = getJourneyTokenFromSession(chatId);
     let patientInfo = {};
+    let treatmentKey = ""; // משתנה לשמירת סוג התור
     
     if (token) {
       const journeyInfo = await fetchBotJourneyInfo(token);
       patientInfo = journeyInfo?.patient || {};
+      treatmentKey = journeyInfo?.bot_treatment_key || "";
     }
     
-    const waBtn = getWhatsAppButton(patientInfo);
+    // קורא לפונקציה עם שני הפרמטרים
+    const waBtn = getWhatsAppButton(patientInfo, treatmentKey);
     
     return editMessage(
       chatId, 
@@ -507,7 +521,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     return handleFlowSelection(chatId, messageId, flowCode);
   }
  
-  // --- UPDATED: Slots with WhatsApp Fallback ---
+  // --- Slots with dynamic WhatsApp Fallback ---
   if (data === "booking:show_slots") {
     await editMessage(chatId, messageId, "🔍 מחפש תורים זמינים...");
 
@@ -529,8 +543,8 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_treatment_key);
     journeyTokensByChat.set(String(chatId) + "_patient_info", JSON.stringify(journeyInfo.patient));
     
-    // מייצר את כפתור הוואטסאפ עם פרטי המטופל
-    const waBtn = getWhatsAppButton(journeyInfo.patient);
+    // מייצר את כפתור הוואטסאפ עם מידע המטופל וסוג הטיפול (bot_treatment_key)
+    const waBtn = getWhatsAppButton(journeyInfo.patient, journeyInfo.bot_treatment_key);
 
     if (!slots || slots.length === 0) {
       return editMessage(
