@@ -6,7 +6,7 @@ app.use(express.json());
  
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
-console.log("SERVER VERSION: integration-v7-cache-merge-full");
+console.log("SERVER VERSION: integration-v8-system2-source-of-truth");
  
 if (!BOT_TOKEN) {
   throw new Error("Missing BOT_TOKEN environment variable");
@@ -92,9 +92,6 @@ async function fetchBotJourneyInfo(token) {
 
 async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
   const requestBody = { bot_treatment_key: botTreatmentKey };
-  console.log("REQUEST TO SYSTEM 2 - botTreatmentKey:", botTreatmentKey);
-  console.log("REQUEST TO SYSTEM 2 - body:", JSON.stringify(requestBody));
-
   const response = await fetch(
     "https://rehab-dent-admin.base44.app/api/functions/getAvailableSlotsForSpecialty",
     {
@@ -107,13 +104,33 @@ async function fetchAvailableSlotsFromSystem2(botTreatmentKey) {
     }
   );
 
-  console.log("SYSTEM 2 HTTP status:", response.status);
   const envelope = await response.json();
-  console.log("SYSTEM 2 RAW RESPONSE:", JSON.stringify(envelope, null, 2));
   return envelope?.slots ?? [];
 }
 
-// ===== NEW: Book slot in System 2 with patient info =====
+// ===== NEW: Fetch Active Booking from System 2 =====
+async function fetchActiveBookingFromSystem2(patientId) {
+  if (!patientId) return { success: false };
+  const requestBody = { patient_id: patientId };
+  console.log("CHECKING SYSTEM 2 FOR PATIENT ID:", patientId);
+
+  const response = await fetch(
+    "https://rehab-dent-admin.base44.app/api/functions/getActiveBookingForPatient",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-service-key": "dental-consult-service-2026"
+      },
+      body: JSON.stringify(requestBody),
+    }
+  );
+
+  const envelope = await response.json();
+  console.log("SYSTEM 2 ACTIVE BOOKING RESULT:", JSON.stringify(envelope));
+  return envelope;
+}
+
 async function bookSlotInSystem2(slotId, patientInfo) {
   const requestBody = {
     slot_id: slotId,
@@ -124,8 +141,6 @@ async function bookSlotInSystem2(slotId, patientInfo) {
     action: "confirm"
   };
   
-  console.log("BOOK SLOT IN SYSTEM 2 - body:", JSON.stringify(requestBody));
-
   const response = await fetch(
     "https://rehab-dent-admin.base44.app/api/functions/bookSlot",
     {
@@ -138,17 +153,12 @@ async function bookSlotInSystem2(slotId, patientInfo) {
     }
   );
 
-  console.log("BOOK SLOT HTTP status:", response.status);
   const envelope = await response.json();
-  console.log("BOOK SLOT RAW RESPONSE:", JSON.stringify(envelope, null, 2));
   return envelope;
 }
 
-// ===== NEW: Cancel Booking by slot_id =====
 async function cancelBookingInSystem2(slotId) {
   const requestBody = { slot_id: slotId };
-  console.log("CANCEL BOOKING IN SYSTEM 2 - body:", JSON.stringify(requestBody));
-
   const response = await fetch(
     "https://rehab-dent-admin.base44.app/api/functions/cancelBooking",
     {
@@ -161,9 +171,7 @@ async function cancelBookingInSystem2(slotId) {
     }
   );
 
-  console.log("CANCEL BOOKING HTTP status:", response.status);
   const envelope = await response.json();
-  console.log("CANCEL BOOKING RAW RESPONSE:", JSON.stringify(envelope, null, 2));
   return envelope;
 }
 
@@ -195,7 +203,7 @@ async function createJourneyBookingRecord(token, slotId) {
       body: JSON.stringify({
         token,
         slot_id: slotId,
-        external_slot_id: slotId, // UPDATED
+        external_slot_id: slotId,
         booking_source: "telegram",
       }),
     }
@@ -205,28 +213,29 @@ async function createJourneyBookingRecord(token, slotId) {
 }
  
 async function sendJourneyBookingMenu(chatId, messageId, token) {
-  const bookingState = await fetchJourneyBookingState(token);
-  console.log("SEND MENU NEW BUILD");
-  console.log("DEBUG bookingState:", JSON.stringify(bookingState, null, 2));
- 
-  let localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
-  console.log("DEBUG localBooking:", JSON.stringify(localBooking, null, 2));
- 
-  const hasSystemABooking = bookingState?.success && bookingState?.exists && bookingState?.booking;
+  // נמשוך את פרטי המטופל כדי לשאול את System 2
+  const journeyInfo = await fetchBotJourneyInfo(token);
+  const patientId = journeyInfo?.patient?.id_number;
 
-  if (hasSystemABooking || localBooking) {
-    const sysA = bookingState?.booking || {};
-    const b = {
-      slot_date: sysA.slot_date || localBooking?.slot_date || "-",
-      slot_time: sysA.slot_time || localBooking?.slot_time || "-",
-      provider_name: sysA.provider_name || localBooking?.provider_name || "-",
-      location_name: sysA.location_name || localBooking?.location_name || "-",
-    };
- 
+  let activeBooking = null;
+
+  if (patientId) {
+    const sys2Result = await fetchActiveBookingFromSystem2(patientId);
+    if (sys2Result?.success && sys2Result?.booking) {
+      activeBooking = sys2Result.booking;
+    }
+  }
+
+  // גיבוי לזיכרון מקומי במידה והפונקציה עדיין לא עלתה לאוויר
+  if (!activeBooking) {
+    activeBooking = journeyTokensByChat.get(String(chatId) + "_booking");
+  }
+
+  if (activeBooking) {
     return editMessage(
       chatId,
       messageId,
-      `🏥 יש לך תור קיים\n\n📅 ${b.slot_date}\n🕒 ${b.slot_time}\n👨‍⚕️ ${b.provider_name}\n📍 ${b.location_name}`,
+      `🏥 יש לך תור קיים\n\n📅 ${activeBooking.date || activeBooking.slot_date || "-"}\n🕒 ${activeBooking.time || activeBooking.slot_time || "-"}\n👨‍⚕️ ${activeBooking.doctor_name || activeBooking.provider_name || "-"}\n📍 מרפאת שיקום הפה`,
       {
         inline_keyboard: [
           [{ text: "📋 צפה בהזמנה", callback_data: "booking:view" }],
@@ -237,7 +246,6 @@ async function sendJourneyBookingMenu(chatId, messageId, token) {
     );
   }
  
-  // התור לא קיים. מדלגים על בדיקת השדה current_step בגלל שהוא חסר ב-API.
   return editMessage(
     chatId,
     messageId,
@@ -293,10 +301,6 @@ function inlineKeyboard(rows) {
   };
 }
  
-// ---------------------------
-// UI text
-// ---------------------------
- 
 const START_TEXT = `שלום,
 ברוך הבא למערכת זימון התורים של המחלקה לשיקום הפה.
  
@@ -337,21 +341,13 @@ function backToMainKeyboard() {
   ]);
 }
  
-// ---------------------------
-// Optional bridge to your app
-// ---------------------------
- 
 async function fetchAvailableSlots(flowType) {
   if (!APP_API_BASE_URL) {
-    console.log("APP_API_BASE_URL missing");
     return [];
   }
  
   try {
     const url = `${APP_API_BASE_URL}/api/functions/getAvailableSlots`;
-    console.log("Fetching slots from:", url);
-    console.log("FLOW TYPE:", flowType);
- 
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -364,72 +360,38 @@ async function fetchAvailableSlots(flowType) {
  
     const text = await res.text();
  
-    console.log("HTTP status:", res.status);
-    console.log("Raw response preview:", text.slice(0, 300));
- 
     if (!res.ok) {
-      console.error("Failed to fetch slots from app:", text);
       return [];
     }
  
     let parsed;
- 
     try {
       parsed = JSON.parse(text);
     } catch (err) {
-      console.error("Failed to parse JSON response:", err);
-      console.log("Full raw response was:", text);
       return [];
     }
  
-    console.log("PARSED RESPONSE:");
-    console.log(JSON.stringify(parsed, null, 2));
- 
     const slots = Array.isArray(parsed?.slots) ? parsed.slots : [];
- 
-    console.log("EXTRACTED SLOTS:");
-    console.log(JSON.stringify(slots, null, 2));
-    console.log("EXTRACTED SLOTS LENGTH:", slots.length);
- 
     return slots;
  
   } catch (error) {
-    console.error("fetchAvailableSlots error:", error);
     return [];
   }
 }
  
 function slotKeyboard(slots, flowType) {
   const rows = slots.slice(0, 8).map((slot) => {
-    console.log("SINGLE SLOT OBJECT:");
-    console.log(JSON.stringify(slot, null, 2));
- 
     const slotId =
-      slot.slot_id ||
-      slot.id ||
-      slot._id ||
-      slot.uuid ||
-      slot.value ||
-      "missing_id";
+      slot.slot_id || slot.id || slot._id || slot.uuid || slot.value || "missing_id";
  
     const doctorName =
-      slot.doctor_name ||
-      slot.doctor ||
-      slot.provider_name ||
-      slot.provider ||
-      "ללא שם";
+      slot.doctor_name || slot.doctor || slot.provider_name || slot.provider || "ללא שם";
  
     const dateText =
-      slot.date ||
-      slot.day ||
-      slot.start_date ||
-      "ללא תאריך";
+      slot.date || slot.day || slot.start_date || "ללא תאריך";
  
     const timeText =
-      slot.time ||
-      slot.hour ||
-      slot.start_time ||
-      "ללא שעה";
+      slot.time || slot.hour || slot.start_time || "ללא שעה";
  
     return [
       {
@@ -442,10 +404,6 @@ function slotKeyboard(slots, flowType) {
   rows.push([{ text: "חזרה לתפריט הראשי", callback_data: "nav:main" }]);
   return inlineKeyboard(rows);
 }
- 
-// ---------------------------
-// Flow handlers
-// ---------------------------
  
 async function showMainMenu(chatId) {
   return sendMessage(chatId, START_TEXT, mainMenuKeyboard());
@@ -528,9 +486,9 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     return handleFlowSelection(chatId, messageId, flowCode);
   }
  
-  // Slots — קריאה לשתי המערכות בנפרד
+  // Slots
   if (data === "booking:show_slots") {
-    await editMessage(chatId, messageId, "🔍 טוען מידע על התור שלך...");
+    await editMessage(chatId, messageId, "🔍 מחפש תורים זמינים...");
 
     const token = getJourneyTokenFromSession(chatId);
     if (!token) {
@@ -539,9 +497,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // צעד 1: קרא מידע על המסע מאפליקציה 1
     const journeyInfo = await fetchBotJourneyInfo(token);
-    console.log("JOURNEY INFO:", JSON.stringify(journeyInfo, null, 2));
 
     if (!journeyInfo?.success || !journeyInfo?.bot_specialty_key) {
       return editMessage(chatId, messageId, "❌ לא ניתן למצוא מידע על המסע.", {
@@ -549,11 +505,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // צעד 2: קרא תורים ישירות מאפליקציה 2
     const slots = await fetchAvailableSlotsFromSystem2(journeyInfo.bot_treatment_key);
-    console.log("SLOTS FROM SYSTEM 2:", JSON.stringify(slots, null, 2));
-
-    // שמור את פרטי המטופל לשימוש במהלך קביעת התור
     journeyTokensByChat.set(String(chatId) + "_patient_info", JSON.stringify(journeyInfo.patient));
 
     if (!slots || slots.length === 0) {
@@ -584,11 +536,22 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    const bookingState = await fetchJourneyBookingState(token);
-    const localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
-    const sysA = bookingState?.booking || {};
-    
-    const slotIdToCancel = sysA.external_slot_id || localBooking?.external_slot_id || localBooking?.slot_id;
+    const journeyInfo = await fetchBotJourneyInfo(token);
+    const patientId = journeyInfo?.patient?.id_number;
+
+    let slotIdToCancel = null;
+
+    if (patientId) {
+      const sys2Result = await fetchActiveBookingFromSystem2(patientId);
+      if (sys2Result?.success && sys2Result?.booking) {
+        slotIdToCancel = sys2Result.booking.slot_id;
+      }
+    }
+
+    if (!slotIdToCancel) {
+      const localBooking = journeyTokensByChat.get(String(chatId) + "_booking");
+      slotIdToCancel = localBooking?.slot_id;
+    }
     
     if (!slotIdToCancel) {
       return editMessage(chatId, messageId, "❌ לא נמצא מזהה משבצת תקין לביטול.", {
@@ -619,9 +582,7 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     return sendJourneyBookingMenu(chatId, messageId, token);
   }
  
-  // קביעת תור — שתי קריאות:
-  // 1. bookSlot ב-System 2 (יצירת Booking + סימון slot כתפוס + שמירת פרטי מטופל)
-  // 2. createJourneyBooking ב-System A (עדכון מסע המטופל)
+  // קביעת תור
   if (data.startsWith("slot:")) {
     const slotId = data.slice(5);
     const token = getJourneyTokenFromSession(chatId);
@@ -636,11 +597,9 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
     }
 
     const patientInfo = patientInfoStr ? JSON.parse(patientInfoStr) : {};
-    console.log("BOOKING FOR PATIENT:", patientInfo.full_name, "| ID:", patientInfo.id_number, "| Phone:", patientInfo.phone);
 
-    // קריאה 1: bookSlot ב-System 2 (יצירת Booking + עדכון slot כתפוס)
+    // קריאה 1: bookSlot ב-System 2
     const system2Result = await bookSlotInSystem2(slotId, patientInfo);
-    console.log("SYSTEM 2 BOOK RESULT:", JSON.stringify(system2Result, null, 2));
 
     if (!system2Result?.success) {
       const errorMsg = system2Result?.error || "שגיאה לא ידועה";
@@ -652,9 +611,8 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
       });
     }
 
-    // קריאה 2: createJourneyBooking ב-System A (עדכון מסע המטופל)
+    // קריאה 2: createJourneyBooking ב-System A
     const result = await createJourneyBookingRecord(token, slotId);
-    console.log("CREATE BOOKING RESULT:", JSON.stringify(result, null, 2));
 
     if (result?.success) {
       const b = result.booking || {};
@@ -742,8 +700,6 @@ async function handleCallback(chatId, messageId, callbackQueryId, data) {
  
   if (data === "rehab_exam_q3:yes") {
     const slots = await fetchAvailableSlots("rehab_exam_booking");
-    console.log("SLOTS RECEIVED IN FLOW:", slots);
-    console.log("SLOTS LENGTH:", slots?.length);
  
     if (slots.length > 0) {
       return editMessage(
@@ -903,7 +859,6 @@ app.get("/", (_req, res) => {
 app.post("/telegram/webhook", async (req, res) => {
   try {
     const update = req.body;
-    console.log("Incoming update:", JSON.stringify(update, null, 2));
  
     // Button clicks (callback_query)
     if (update.callback_query) {
@@ -911,8 +866,6 @@ app.post("/telegram/webhook", async (req, res) => {
       const chatId = callback.message.chat.id;
       const messageId = callback.message.message_id;
       const data = callback.data;
- 
-      console.log("Button clicked:", data);
  
       await handleCallback(chatId, messageId, callback.id, data);
       return res.sendStatus(200);
@@ -926,8 +879,6 @@ app.post("/telegram/webhook", async (req, res) => {
       if (text.startsWith("/start")) {
         const parts = text.split(" ");
         const payload = parts.length > 1 ? parts[1] : null;
- 
-        console.log("START payload:", payload);
  
         if (payload) {
           const token = payload.trim();
@@ -948,10 +899,7 @@ app.post("/telegram/webhook", async (req, res) => {
               }
             );
  
-            console.log("Base44 HTTP status:", response.status, response.statusText);
- 
             const envelope = await response.json();
-            console.log("Base44 raw result:", JSON.stringify(envelope, null, 2));
  
             const result = envelope?.data ?? envelope ?? {};
             const journeyData =
@@ -979,7 +927,6 @@ app.post("/telegram/webhook", async (req, res) => {
               }
             );
  
-            console.log("PatientJourney found:", JSON.stringify(journeyData, null, 2));
             return res.sendStatus(200);
  
           } catch (error) {
