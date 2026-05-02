@@ -182,12 +182,21 @@ function getWhatsAppButton(patientInfo, treatmentKey = "") {
   const patientId = patientInfo?.id_number || "לא ידוע";
   const patientName = patientInfo?.full_name || "מטופל";
   
-  // מיפוי מפתחות הטיפול לשמות קריאים בעברית
+// מיפוי מפתחות הטיפול לשמות קריאים בעברית
   const treatmentMap = {
+    // השלבים הקיימים
     "endo_exam": "בדיקת אנדודונט",
     "rehab_exam": "בדיקה שיקומית",
     "rehab_doctor": "תור לרופא משקם",
-    "rehab_followup": "המשך טיפול"
+    "rehab_followup": "המשך טיפול",
+    
+    // השלבים החדשים ששלפנו ממערכת 1
+    "orthodontics": "תור לאורתודונטיה",
+    "periodontics": "תור לפריודונטיה",
+    "prosthodontics": "תור לשיקום הפה",
+    "oral_maxillofacial_surgery": "תור לכירורגיית פה ולסת",
+    "endodontics": "תור לאנדודונטיה",
+    "oral_medicine": "תור לרפואת הפה"
   };
   
   // שימוש בשם המתורגם או ברירת מחדל
